@@ -15,19 +15,19 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Payment\Model\Config as PaymentConfig;
 
 class PaymentIo implements \Wiserobot\Io\Api\PaymentIoInterface
 {
+    public $scopeConfig;
+    public $paymentConfig;
+
     public function __construct(
-        RequestInterface     $request,
         ScopeConfigInterface $scopeConfig,
         PaymentConfig        $paymentConfig
 
     ) {
-        $this->request       = $request;
         $this->scopeConfig   = $scopeConfig;
         $this->paymentConfig = $paymentConfig;
     }

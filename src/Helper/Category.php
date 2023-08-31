@@ -23,6 +23,8 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
     public $pathIndex    = [];
     public $categoryData = [];
     public $logModel     = null;
+    public $storeManager;
+    public $categoryFactory;
 
     public function __construct(
         StoreManagerInterface  $storeManager,
@@ -45,7 +47,7 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
         $paths  = preg_split("/(::|:|,)/", $tree);
         $result = [];
         foreach ($paths as $path) {
-            $path = trim($path);
+            $path = trim((string) $path);
             if (!$path) {
                 continue;
             }
@@ -66,14 +68,14 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
     public function processCategoryPath($path, $storeId, $allowCreate = false)
     {
         // name is splited by / or > or \
-        $categoryLevels = preg_split("/(\/|>|\\\)/", $path);
+        $categoryLevels = preg_split("/(\/|>|\\\)/", (string) $path);
         $store          = $this->storeManager->getStore()->load($storeId);
         $rootCatId      = $store->getRootCategoryId();
         $rootCat        = $this->categoryFactory->create()->load($rootCatId);
         $parentId       = $rootCatId;
         $resultCatIds   = [];
         foreach ($categoryLevels as $levelName) {
-            $levelName  = trim($levelName);
+            $levelName  = trim((string) $levelName);
             if (!$levelName || in_array($levelName, [$rootCat->getName()])) {
                 continue;
             }
@@ -174,7 +176,7 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
         sort($paths);
         foreach ($paths as $path) {
             $count = 1;
-            $items = explode("/", $path);
+            $items = explode("/", (string) $path);
             // remove the first, root category id
             array_shift($items);
             foreach ($items as $catId) {

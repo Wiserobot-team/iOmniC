@@ -27,6 +27,13 @@ use Wiserobot\Io\Model\ProductimageFactory;
 class Image extends \Magento\Framework\App\Helper\AbstractHelper
 {
     protected $currentPlacements;
+    public $filesystem;
+    public $scopeConfig;
+    public $productFactory;
+    public $galleryReadHandler;
+    public $galleryProcessor;
+    public $productGallery;
+    public $productImageFactory;
 
     public function __construct(
         Filesystem                 $filesystem,
@@ -146,7 +153,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         if (!file_exists($dir)) {
             mkdir($dir);
         }
-        $imageName  = explode("/", $imageUrl);
+        $imageName  = explode("/", (string) $imageUrl);
         $imageName  = end($imageName);
         // replace all none standard charracter with _
         $imageName  = preg_replace('/[^a-z0-9_\\-\\.]+/i', '_', $imageName);
@@ -154,7 +161,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         $path       = $dir . "/" . $imageName;
 
         try {
-            $imageUrl = str_replace(" ", "%20", $imageUrl);
+            $imageUrl = str_replace(" ", "%20", (string) $imageUrl);
             $isCopy   = copy($imageUrl, $path);
             if ($isCopy) {
                 if ($isMainImage) {
@@ -212,7 +219,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                         // $this->productGallery->deleteGallery($image["value_id"]);
                         // $this->galleryProcessor->removeImage($product, $image["file"]);
                         $this->deleteProductImage($image["file"]);
-                        $nameImage = explode("/", $image["file"]);
+                        $nameImage = explode("/", (string) $image["file"]);
                         $tamp      = count($nameImage);
                         $importModel->results["response"]["image"]["success"][] = "sku '" . $product->getSku() . "' - product id <" . $product->getId() . "> delete image '". $nameImage[$tamp-1] . "' at position " . $position;
                         $message = "SKU '" . $product->getSku() . "' - product id <" . $product->getId() . "> delete image '". $nameImage[$tamp-1] . "' at position " . $position;
@@ -296,7 +303,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     */
     public function deleteProductImage($path)
     {
-        $filePath = $this->filesystem->getDirectoryWrite(\Magento\Framework\App\Filesystem\DirectoryList::MEDIA)->getAbsolutePath('') . 'catalog/product/' . trim($path, ' /');
+        $filePath = $this->filesystem->getDirectoryWrite(\Magento\Framework\App\Filesystem\DirectoryList::MEDIA)->getAbsolutePath('') . 'catalog/product/' . trim((string) $path, ' /');
         if (file_exists($filePath)) {
             try {
                 @unlink($filePath);

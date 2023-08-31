@@ -19,6 +19,8 @@ use Magento\Catalog\Api\ProductRepositoryInterface;
 
 class Sku extends \Magento\Framework\App\Helper\AbstractHelper
 {
+    public $productRepository;
+
     public function __construct(
         ProductRepositoryInterface $productRepository
     ) {

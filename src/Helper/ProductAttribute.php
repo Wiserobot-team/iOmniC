@@ -27,6 +27,13 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
 {
     public $attributes = [];
     public $productAttribute;
+    public $attributeRepository;
+    public $attributeOptionManagement;
+    public $attributeOptionFactory;
+    public $attributeOptionLabelFactory;
+    public $attributeSourceTableFactory;
+    public $swatchesHelper;
+    public $swatchCollectionFactory;
 
     public function __construct(
         ProductAttributeRepositoryInterface  $attributeRepository,
@@ -49,7 +56,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
 
     public function getAttributeOptionValue($attributeCode, $optionLabel)
     {
-        $optionLabel = trim($optionLabel);
+        $optionLabel = trim((string) $optionLabel);
         if (!$optionLabel) {
             return false;
         }
@@ -109,7 +116,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
             $sourceModel->setAttribute($this->attributes[$attributeCode]['attribute']);
             $options = $sourceModel->getAllOptions(false);
             foreach ($options as $option) {
-                $label = trim($option['label']);
+                $label = trim((string) $option['label']);
                 $value = $option['value'];
                 $this->attributes[$attributeCode]['values'][$value] = $label;
                 $this->attributes[$attributeCode]['labels'][$label] = $value;

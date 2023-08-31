@@ -15,9 +15,6 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Zend\Log\Writer\Stream;
-use Zend\Log\Logger;
-
 use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Sales\Model\OrderFactory;
@@ -26,9 +23,13 @@ use Magento\Sales\Model\Order\Shipment\TrackFactory as ShipmentTrackFactory;
 
 class ShipmentImport implements \Wiserobot\Io\Api\ShipmentImportInterface
 {
-    public $logFile = "wiserobotio_shipment_import.log";
-    public $showLog = false;
-    public $results = [];
+    private $logFile = "wiserobotio_shipment_import.log";
+    private $showLog = false;
+    public $results  = [];
+    public $filesystem;
+    public $orderFactory;
+    public $convertOrder;
+    public $shipmentTrackFactory;
 
     public function __construct(
         Filesystem                  $filesystem,
@@ -40,18 +41,6 @@ class ShipmentImport implements \Wiserobot\Io\Api\ShipmentImportInterface
         $this->orderFactory         = $orderFactory;
         $this->convertOrder         = $convertOrder;
         $this->shipmentTrackFactory = $shipmentTrackFactory;
-
-        register_shutdown_function([$this, 'shutdownHandler']);
-    }
-
-    public function shutdownHandler()
-    {
-        $error = error_get_last();
-        if (is_null($error)) {
-            return;
-        } else {
-            $this->log(print_r($error));
-        }
     }
 
     public function import($order_id, $shipment_info)
@@ -257,8 +246,8 @@ class ShipmentImport implements \Wiserobot\Io\Api\ShipmentImportInterface
     public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
-        $writer = new Stream($logDir->getAbsolutePath('') . $this->logFile);
-        $logger = new Logger();
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);
+        $logger = new \Zend_Log();
         $logger->addWriter($writer);
         $logger->info(print_r($message, true));
 

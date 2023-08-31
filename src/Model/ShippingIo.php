@@ -15,19 +15,19 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Shipping\Model\Config as ShippingConfig;
 
 class ShippingIo implements \Wiserobot\Io\Api\ShippingIoInterface
 {
+    public $scopeConfig;
+    public $shippingConfig;
+
     public function __construct(
-        RequestInterface      $request,
         ScopeConfigInterface  $scopeConfig,
         ShippingConfig        $shippingConfig
 
     ) {
-        $this->request        = $request;
         $this->scopeConfig    = $scopeConfig;
         $this->shippingConfig = $shippingConfig;
     }

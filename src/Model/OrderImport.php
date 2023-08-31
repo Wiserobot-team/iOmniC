@@ -15,9 +15,6 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Zend\Log\Writer\Stream;
-use Zend\Log\Logger;
-
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Framework\Filesystem;
@@ -49,9 +46,35 @@ use Wiserobot\Io\Helper\Sku as SkuHelper;
 
 class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
 {
-    public $logFile = "wiserobotio_order_import.log";
-    public $showLog = false;
-    public $results = [];
+    private $logFile = "wiserobotio_order_import.log";
+    private $showLog = false;
+    public $results  = [];
+    public $scopeConfig;
+    public $storeManager;
+    public $filesystem;
+    public $customerFactory;
+    public $customerRepository;
+    public $productFactory;
+    public $shippingRate;
+    public $cartManagementInterface;
+    public $cartRepositoryInterface;
+    public $orderItemFactory;
+    public $orderFactory;
+    public $regionFactory;
+    public $paymentFactory;
+    public $addressInterfaceFactory;
+    public $orderAddressFactory;
+    public $invoiceManagementInterface;
+    public $transaction;
+    public $convertOrder;
+    public $shipmentTrackFactory;
+    public $creditmemoFactory;
+    public $eventManager;
+    public $productRepository;
+    public $shippingConfig;
+    public $paymentConfig;
+    public $ioOrderFactory;
+    public $skuHelper;
 
     public function __construct(
         ScopeConfigInterface               $scopeConfig,
@@ -107,18 +130,6 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
         $this->paymentConfig               = $paymentConfig;
         $this->ioOrderFactory              = $ioOrderFactory;
         $this->skuHelper                   = $skuHelper;
-
-        register_shutdown_function([$this, 'shutdownHandler']);
-    }
-
-    public function shutdownHandler()
-    {
-        $error = error_get_last();
-        if (is_null($error)) {
-            return;
-        } else {
-            $this->log(print_r($error));
-        }
     }
 
     public function import($store, $order_info, $payment_info, $shipping_info, $billing_info, $item_info, $status_histories = [], $shipment_info = [], $refund_info = [])
@@ -305,6 +316,16 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
                         // create credit memo for order
                         if ($refundStatus && $refundStatus != "unrefunded" && count($refundInfo)) {
                             $this->createCreditMemo($oldOrderIId, $refundInfo);
+                            $orderObject = $this->orderFactory->create()->loadByIncrementId($oldOrder->getIncrementId());
+                            if ($orderObject->hasShipments()) {
+                                if ($orderObject->getStatus() != "closed") {
+                                    if (in_array($orderObject->getStatus(), ["complete"])) {
+                                        $orderObject->setData("status", "closed");
+                                        $orderObject->setData("state", "closed");
+                                        $orderObject->save();
+                                    }
+                                }
+                            }
                         }
                         return;
                     } else {
@@ -313,7 +334,6 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
                             $this->createCreditMemo($oldOrderIId, $refundInfo);
                             $orderObject = $this->orderFactory->create()->loadByIncrementId($oldOrder->getIncrementId());
                             if (!$orderObject->hasShipments()) {
-                                // update order status
                                 if ($orderObject->getStatus() != "closed") {
                                     if (in_array($orderObject->getStatus(), ["processing"])) {
                                         $orderObject->setData("status", "closed");
@@ -381,13 +401,13 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
             $customer->setWebsiteId($store->getWebsiteId())
                      ->loadByEmail($customerEmail);
 
-            if (trim($shippingInfo["lastname"]) == "") {
+            if (trim((string) $shippingInfo["lastname"]) == "") {
                 $lastnameValid = " unknown";
             } else {
                 $lastnameValid = $shippingInfo["lastname"];
             }
 
-            if (trim($shippingInfo["firstname"]) == "") {
+            if (trim((string) $shippingInfo["firstname"]) == "") {
                 $firstnameValid = $lastnameValid;
             } else {
                 $firstnameValid = $shippingInfo["firstname"];
@@ -777,13 +797,13 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
             "telephone"  => $shippingInfo["telephone"],
         );
 
-        if (trim($data["telephone"]) == "") {
+        if (trim((string) $data["telephone"]) == "") {
             $data["telephone"] = 0000;
         }
-        if (trim($data["lastname"]) == "") {
+        if (trim((string) $data["lastname"]) == "") {
             $data["lastname"] = " unknown";
         }
-        if (trim($data["firstname"]) == "") {
+        if (trim((string) $data["firstname"]) == "") {
             $data["firstname"] = $data["lastname"];
         }
 
@@ -884,13 +904,13 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
             $PhoneNumberDay = $billingInfo["telephone"];
         }
 
-        if (trim($PhoneNumberDay) == "") {
+        if (trim((string) $PhoneNumberDay) == "") {
             $PhoneNumberDay = 0000;
         }
-        if (trim($LastName) == "") {
+        if (trim((string) $LastName) == "") {
             $LastName = " unknown";
         }
-        if (trim($FirstName) == "") {
+        if (trim((string) $FirstName) == "") {
             $FirstName = $LastName;
         }
 
@@ -936,13 +956,13 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
     {
         $regionCode = "";
         if ($data['country_id'] == "HR" && !$data['region_id']) {
-            if (trim($data['city']) == 'Rijeka') {
+            if (trim((string) $data['city']) == 'Rijeka') {
                 $regionCode = "HR-08";
             }
         }
 
         if ($data['country_id'] == "CH" && !$data['region_id']) {
-            if (trim($data['city']) == 'Geneva') {
+            if (trim((string) $data['city']) == 'Geneva') {
                 $regionCode = "GE";
             }
         }
@@ -960,11 +980,11 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
                 'Vorarlberg'       => "VB"
             ];
 
-            if (isset($regions[trim($data['region'])])) {
-                $regionCode = $regions[trim($data['region'])];
+            if (isset($regions[trim((string) $data['region'])])) {
+                $regionCode = $regions[trim((string) $data['region'])];
             }
 
-            if (trim($data['city']) == 'Pfarrkirchen') {
+            if (trim((string) $data['city']) == 'Pfarrkirchen') {
                 $regionCode = "OO";
             }
         }
@@ -1423,8 +1443,8 @@ class OrderImport implements \Wiserobot\Io\Api\OrderImportInterface
     public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
-        $writer = new Stream($logDir->getAbsolutePath('') . $this->logFile);
-        $logger = new Logger();
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);
+        $logger = new \Zend_Log();
         $logger->addWriter($writer);
         $logger->info(print_r($message, true));
 

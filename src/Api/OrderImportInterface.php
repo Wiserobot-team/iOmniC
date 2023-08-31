@@ -25,10 +25,10 @@ interface OrderImportInterface
      * @param string[] $payment_info
      * @param string[] $shipping_info
      * @param string[] $billing_info
+     * @param mixed $item_info
      * @param mixed $status_histories
      * @param mixed $shipment_info
      * @param mixed $refund_info
-     * @param mixed $item_info
      * @return array
      */
     public function import($store, $order_info, $payment_info, $shipping_info, $billing_info, $item_info, $status_histories = [], $shipment_info = [], $refund_info = []);

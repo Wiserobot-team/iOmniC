@@ -15,9 +15,6 @@
 */
 namespace WiseRobot\Io\Setup;
 
-use Zend\Log\Writer\Stream;
-use Zend\Log\Logger;
-
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\Filesystem;
 use Magento\Framework\Setup\UpgradeDataInterface;
@@ -186,8 +183,8 @@ class UpgradeData implements UpgradeDataInterface
     public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
-        $writer = new Stream($logDir->getAbsolutePath('') . "wiserobotio_install.log");
-        $logger = new Logger();
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . "wiserobotio_install.log");
+        $logger = new \Zend_Log();
         $logger->addWriter($writer);
         $logger->info(print_r($message, true));
     }

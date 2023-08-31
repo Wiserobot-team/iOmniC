@@ -15,10 +15,6 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Zend\Log\Writer\Stream;
-use Zend\Log\Logger;
-
-use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
@@ -53,13 +49,41 @@ use Wiserobot\Io\Model\ProductimageFactory;
 
 class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
 {
-    public $logFile      = "wiserobotio_product_import.log";
-    public $showLog      = false;
+    private $logFile     = "wiserobotio_product_import.log";
+    private $showLog     = false;
     public $isNewProduct = false;
     public $results      = [];
+    public $scopeConfig;
+    public $filesystem;
+    public $storeManager;
+    public $configurableProduct;
+    public $groupedProduct;
+    public $classModelFactory;
+    public $productLink;
+    public $productAttributeRepository;
+    public $categoryLinkManagementInterface;
+    public $productUrlRewriteGenerator;
+    public $urlPersistInterface;
+    public $productOptionFactory;
+    public $productRepositoryInterface;
+    public $productAttributeManagement;
+    public $productFactory;
+    public $stockRegistryInterface;
+    public $productCollectionFactory;
+    public $entityFactory;
+    public $entityAttributeFactory;
+    public $entityAttributeSetFactory;
+    public $resourceConnection;
+    public $timezoneInterface;
+    public $productResource;
+    public $categoryFactory;
+    public $attributeRepositoryInterface;
+    public $productAttributeHelper;
+    public $categoryHelper;
+    public $imageHelper;
+    public $productimageFactory;
 
     public function __construct(
-        RequestInterface                                $request,
         ScopeConfigInterface                            $scopeConfig,
         Filesystem                                      $filesystem,
         StoreManagerInterface                           $storeManager,
@@ -91,7 +115,6 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
         ProductimageFactory                             $productimageFactory
 
     ) {
-        $this->request                                  = $request;
         $this->scopeConfig                              = $scopeConfig;
         $this->filesystem                               = $filesystem;
         $this->storeManager                             = $storeManager;
@@ -123,18 +146,6 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
         $this->categoryHelper->logModel                 = $this;
         $this->imageHelper                              = $imageHelper;
         $this->productimageFactory                      = $productimageFactory;
-
-        register_shutdown_function([$this, 'shutdownHandler']);
-    }
-
-    public function shutdownHandler()
-    {
-        $error = error_get_last();
-        if (is_null($error)) {
-            return;
-        } else {
-            $this->log(print_r($error));
-        }
     }
 
     public $ignoreAttributes = [
@@ -420,7 +431,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
                 }
             }
         } catch (\Exception $e) {
-            $this->results["response"]["data"]["error"][] = "error sku '" . $sku . "' - product id <" . $product->getId() . ">" . $e->getMessage();
+            $this->results["response"]["data"]["error"][] = "error sku '" . $sku . "' - product id <" . $product->getId() . "> " . $e->getMessage();
             $this->log("ERROR: sku '" . $sku . "' - product id <" . $product->getId() . "> " . $e->getMessage());
             $this->cleanResponseMessages();
             throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
@@ -487,7 +498,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
             $crossSellFlag = false;
             // add related products
             if (isset($productDataToImport['attributes']['_related_skus']) && $productDataToImport['attributes']['_related_skus']) {
-                $relatedSkusToSet = array_map('trim', explode(',', $productDataToImport['attributes']['_related_skus']));
+                $relatedSkusToSet = array_map('trim', explode(',', (string) $productDataToImport['attributes']['_related_skus']));
                 $relatedSkusToSet = array_unique($relatedSkusToSet);
                 if (count($relatedSkusToSet)) {
                     $relatedProducts    = $product->getRelatedProducts();
@@ -496,7 +507,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
                         $relatedProArranged[$relatedPro->getSku()] = ['position' => $relatedPro->getPosition()];
                     }
                     foreach ($relatedSkusToSet as $relatedSku) {
-                        $relatedSku   = trim($relatedSku);
+                        $relatedSku   = trim((string) $relatedSku);
                         $relatedProID = $this->productFactory->create()->getIdBySku($relatedSku);
                         if (!$relatedProID) {
                             $this->results["response"]["data"]["error"][] = "warn related sku '" . $relatedSku . "' not found";
@@ -522,7 +533,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
             }
             // add up-sell products
             if (isset($productDataToImport['attributes']['_upsell_skus']) && $productDataToImport['attributes']['_upsell_skus']) {
-                $upSellSkusToSet = array_map('trim', explode(',', $productDataToImport['attributes']['_upsell_skus']));
+                $upSellSkusToSet = array_map('trim', explode(',', (string) $productDataToImport['attributes']['_upsell_skus']));
                 $upSellSkusToSet = array_unique($upSellSkusToSet);
                 if (count($upSellSkusToSet)) {
                     $upSellProducts    = $product->getUpSellProducts();
@@ -531,7 +542,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
                         $upSellProArranged[$upSellPro->getSku()] = ['position' => $upSellPro->getPosition()];
                     }
                     foreach ($upSellSkusToSet as $upSellSku) {
-                        $upSellSku   = trim($upSellSku);
+                        $upSellSku   = trim((string) $upSellSku);
                         $upSellProID = $this->productFactory->create()->getIdBySku($upSellSku);
                         if (!$upSellProID) {
                             $this->results["response"]["data"]["error"][] = "warn up-sell sku '" . $upSellSku . "' not found";
@@ -557,7 +568,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
             }
             // add cross-sell products
             if (isset($productDataToImport['attributes']['_crosssell_skus']) && $productDataToImport['attributes']['_crosssell_skus']) {
-                $crossSellSkusToSet = array_map('trim', explode(',', $productDataToImport['attributes']['_crosssell_skus']));
+                $crossSellSkusToSet = array_map('trim', explode(',', (string) $productDataToImport['attributes']['_crosssell_skus']));
                 $crossSellSkusToSet = array_unique($crossSellSkusToSet);
                 if (count($crossSellSkusToSet)) {
                     $crossSellProducts    = $product->getCrossSellProducts();
@@ -566,7 +577,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
                         $crossSellProArranged[$crossSellPro->getSku()] = ['position' => $crossSellPro->getPosition()];
                     }
                     foreach ($crossSellSkusToSet as $crossSellSku) {
-                        $crossSellSku   = trim($crossSellSku);
+                        $crossSellSku   = trim((string) $crossSellSku);
                         $crossSellProID = $this->productFactory->create()->getIdBySku($crossSellSku);
                         if (!$crossSellProID) {
                             $this->results["response"]["data"]["error"][] = "warn cross-sell sku '" . $crossSellSku . "' not found";
@@ -605,7 +616,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
                             $this->log("Set cross-sells: sku '" . $product->getSku() . "' " . json_encode($crossSellSkusToSet));
                         }
                     } catch (\Exception $e) {
-                        $this->results["response"]["data"]["error"][] = "error sku '" . $sku . "' - product id <" . $product->getId() . ">" . $e->getMessage();
+                        $this->results["response"]["data"]["error"][] = "error sku '" . $sku . "' - product id <" . $product->getId() . "> " . $e->getMessage();
                         $this->log("ERROR: sku '" . $sku . "' - product id <" . $product->getId() . "> " . $e->getMessage());
                         $this->cleanResponseMessages();
                         throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
@@ -660,7 +671,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
                             $parent = $this->productFactory->create()->load($parentId);
                             $superAttrCodes = $productDataToImport['variation']['super_attribute'];
                             if ($superAttrCodes) {
-                                $superAttrCodes = explode(',', $superAttrCodes);
+                                $superAttrCodes = explode(',', (string) $superAttrCodes);
                                 sort($superAttrCodes);
                                 if ($parent->getTypeId() == 'configurable') {
                                     $childrenProductIds    = $this->configurableProduct->create()->getUsedProductIds($parent);
@@ -891,7 +902,7 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
             }
 
             if ($attrCode == 'status') {
-                if (strtolower($attrValue) == 'true' || $attrValue == "Disabled") {
+                if (strtolower((string) $attrValue) == 'true' || $attrValue == "Disabled") {
                     $attrValue = 2;
                 } else {
                     $attrValue = 1;
@@ -1090,8 +1101,8 @@ class ProductImport implements \Wiserobot\Io\Api\ProductImportInterface
     public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
-        $writer = new Stream($logDir->getAbsolutePath('') . $this->logFile);
-        $logger = new Logger();
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);
+        $logger = new \Zend_Log();
         $logger->addWriter($writer);
         $logger->info(print_r($message, true));
 

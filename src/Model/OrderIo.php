@@ -15,7 +15,6 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Sales\Model\OrderFactory;
@@ -27,9 +26,15 @@ use Magento\Framework\Serialize\SerializerInterface;
 class OrderIo implements \Wiserobot\Io\Api\OrderIoInterface
 {
     public $results = [];
+    public $scopeConfig;
+    public $storeManager;
+    public $orderFactory;
+    public $orderCollectionFactory;
+    public $paymentConfig;
+    public $resourceConnection;
+    public $serializer;
 
     public function __construct(
-        RequestInterface              $request,
         ScopeConfigInterface          $scopeConfig,
         StoreManagerInterface         $storeManager,
         OrderFactory                  $orderFactory,
@@ -39,7 +44,6 @@ class OrderIo implements \Wiserobot\Io\Api\OrderIoInterface
         SerializerInterface           $serializer
 
     ) {
-        $this->request                = $request;
         $this->scopeConfig            = $scopeConfig;
         $this->storeManager           = $storeManager;
         $this->orderFactory           = $orderFactory;
@@ -71,15 +75,15 @@ class OrderIo implements \Wiserobot\Io\Api\OrderIoInterface
         $orderCollection->addFieldToSelect('*');
 
         // filtering
-        $filter = trim($filter);
+        $filter = trim((string) $filter);
         if ($filter) {
-            $filterArray = explode(" and ", $filter);
+            $filterArray = explode(" and ", (string) $filter);
             foreach ($filterArray as $filterItem) {
                 $operator = $this->processFilter($filterItem);
                 if (!$operator) {
                     continue;
                 }
-                $condition = array_map('trim', explode($operator, $filterItem));
+                $condition = array_map('trim', explode($operator, (string) $filterItem));
                 if (count($condition) != 2) {
                     continue;
                 }
@@ -182,13 +186,13 @@ class OrderIo implements \Wiserobot\Io\Api\OrderIoInterface
     public function processFilter($string)
     {
         switch ($string) {
-            case strpos($string, " eq ") == true:
+            case strpos((string) $string, " eq ") == true:
                 $operator = "eq";
                 break;
-            case strpos($string, " gt ") == true:
+            case strpos((string) $string, " gt ") == true:
                 $operator = "gt";
                 break;
-            case strpos($string, " le ") == true:
+            case strpos((string) $string, " le ") == true:
                 $operator = "le";
                 break;
             default:
@@ -533,7 +537,7 @@ class OrderIo implements \Wiserobot\Io\Api\OrderIoInterface
 
     public function formatText($string)
     {
-        $string = str_replace(',', ' ', $string);
+        $string = str_replace(',', ' ', (string) $string);
 
         return $string;
     }

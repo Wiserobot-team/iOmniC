@@ -15,7 +15,6 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Magento\Framework\App\RequestInterface;
 use Magento\Catalog\Model\ProductFactory;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
 use Magento\Store\Model\StoreManagerInterface;
@@ -30,9 +29,18 @@ use Magento\Eav\Api\AttributeRepositoryInterface;
 class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
 {
     public $results = [];
+    public $productFactory;
+    public $productCollectionFactory;
+    public $storeManager;
+    public $timezoneInterface;
+    public $classModelFactory;
+    public $entityAttributeSetFactory;
+    public $categoryFactory;
+    public $configurableProduct;
+    public $groupedProduct;
+    public $attributeRepositoryInterface;
 
     public function __construct(
-        RequestInterface                    $request,
         ProductFactory                      $productFactory,
         ProductCollectionFactory            $productCollectionFactory,
         StoreManagerInterface               $storeManager,
@@ -45,7 +53,6 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
         AttributeRepositoryInterface        $attributeRepositoryInterface
 
     ) {
-        $this->request                      = $request;
         $this->productFactory               = $productFactory;
         $this->productCollectionFactory     = $productCollectionFactory;
         $this->storeManager                 = $storeManager;
@@ -130,7 +137,7 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
         // selecting
         $selectAll   = false;
         $selectAttrs = [];
-        $select      = trim($select);
+        $select      = trim((string) $select);
         if (!$select || $select == "*") {
             $selectAll = true;
             $productCollection->addAttributeToSelect("*");
@@ -138,7 +145,7 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
             // default attributes
             $productCollection->addAttributeToSelect($this->defaultAttributes);
             // custom attributes
-            $selectAttrs = array_map('trim', explode(",", $select));
+            $selectAttrs = array_map('trim', explode(",", (string) $select));
             $productCollection->addAttributeToSelect([$selectAttrs]);
         }
 
@@ -146,15 +153,15 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
         $productCollection->joinTable('cataloginventory_stock_item', 'product_id=entity_id', ['qty', 'min_sale_qty'], '{{table}}.stock_id = 1', 'left');
 
         // filtering
-        $filter = trim($filter);
+        $filter = trim((string) $filter);
         if ($filter) {
-            $filterArray = explode(" and ", $filter);
+            $filterArray = explode(" and ", (string) $filter);
             foreach ($filterArray as $filterItem) {
                 $operator = $this->processFilter($filterItem);
                 if (!$operator) {
                     continue;
                 }
-                $condition = array_map('trim', explode(" " . $operator . " ", $filterItem));
+                $condition = array_map('trim', explode(" " . $operator . " ", (string) $filterItem));
                 if (count($condition) != 2) {
                     continue;
                 }
@@ -171,7 +178,7 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
                 }
 
                 if ($operator == "in") {
-                    $attrValue = array_map('trim', explode(",", $attrValue));
+                    $attrValue = array_map('trim', explode(",", (string) $attrValue));
                 }
 
                 $productCollection->addFieldToFilter(
@@ -352,16 +359,16 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
     public function processFilter($string)
     {
         switch ($string) {
-            case strpos($string, " eq ") == true:
+            case strpos((string) $string, " eq ") == true:
                 $operator = "eq";
                 break;
-            case strpos($string, " gt ") == true:
+            case strpos((string) $string, " gt ") == true:
                 $operator = "gt";
                 break;
-            case strpos($string, " le ") == true:
+            case strpos((string) $string, " le ") == true:
                 $operator = "le";
                 break;
-            case strpos($string, " in ") == true:
+            case strpos((string) $string, " in ") == true:
                 $operator = "in";
                 break;
             default:
@@ -536,8 +543,8 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
 
         if ($attrCode == "special_price") {
             if ($product->getData("special_price")) {
-                $now = strtotime($this->timezoneInterface->date()->format(\Magento\Framework\Stdlib\DateTime::DATETIME_PHP_FORMAT));
-                $timeMax = strtotime($product->getData("special_to_date"));
+                $now     = strtotime((string) $this->timezoneInterface->date()->format(\Magento\Framework\Stdlib\DateTime::DATETIME_PHP_FORMAT));
+                $timeMax = strtotime((string) $product->getData("special_to_date"));
                 if ($timeMax && $now > $timeMax) {
                     return $product->getPrice();
                 } else {
@@ -707,7 +714,7 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
             }
         }
 
-        return trim($result, " : ");
+        return trim((string) $result, " : ");
     }
 
     public function getCategoryTreeCustom($product, $store)
@@ -775,6 +782,6 @@ class ProductIo implements \Wiserobot\Io\Api\ProductIoInterface
             }
         }
 
-        return trim($result, ",");
+        return trim((string) $result, ",");
     }
 }

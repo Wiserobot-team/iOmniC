@@ -15,9 +15,6 @@
 */
 namespace Wiserobot\Io\Model;
 
-use Zend\Log\Writer\Stream;
-use Zend\Log\Logger;
-
 use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Sales\Model\OrderFactory;
@@ -25,9 +22,12 @@ use Magento\Sales\Model\Order\CreditmemoFactory;
 
 class RefundImport implements \Wiserobot\Io\Api\RefundImportInterface
 {
-    public $logFile = "wiserobotio_refund_import.log";
-    public $showLog = false;
-    public $results = [];
+    private $logFile = "wiserobotio_refund_import.log";
+    private $showLog = false;
+    public $results  = [];
+    public $filesystem;
+    public $orderFactory;
+    public $creditmemoFactory;
 
     public function __construct(
         Filesystem               $filesystem,
@@ -37,18 +37,6 @@ class RefundImport implements \Wiserobot\Io\Api\RefundImportInterface
         $this->filesystem        = $filesystem;
         $this->orderFactory      = $orderFactory;
         $this->creditmemoFactory = $creditmemoFactory;
-
-        register_shutdown_function([$this, 'shutdownHandler']);
-    }
-
-    public function shutdownHandler()
-    {
-        $error = error_get_last();
-        if (is_null($error)) {
-            return;
-        } else {
-            $this->log(print_r($error));
-        }
     }
 
     public function import($order_id, $refund_info)
@@ -117,6 +105,15 @@ class RefundImport implements \Wiserobot\Io\Api\RefundImportInterface
                     if ($order->hasInvoices()) {
                         if (!$order->hasCreditmemos()) {
                             $this->createCreditMemo($order, $refundInfo);
+                            $orderObject = $this->orderFactory->create()->loadByIncrementId($order->getIncrementId());
+                            if ($orderObject->getStatus() != "closed") {
+                                if (in_array($orderObject->getStatus(), ["complete"])) {
+                                    $orderObject->setData("status", "closed");
+                                    $orderObject->setData("state", "closed");
+                                    $orderObject->save();
+                                    return;
+                                }
+                            }
                         } else {
                             $this->results["response"]["data"]["success"][] = "skip order " . $order->getIncrementId() . " has been refunded";
                             $this->log("Skip order " . $order->getIncrementId() . " has been refunded");
@@ -135,7 +132,6 @@ class RefundImport implements \Wiserobot\Io\Api\RefundImportInterface
                     if ($order->hasInvoices()) {
                         if (!$order->hasCreditmemos()) {
                             $this->createCreditMemo($order, $refundInfo);
-                            // update order status
                             $orderObject = $this->orderFactory->create()->loadByIncrementId($order->getIncrementId());
                             if ($orderObject->getStatus() != "closed") {
                                 if (in_array($orderObject->getStatus(), ["processing"])) {
@@ -269,8 +265,8 @@ class RefundImport implements \Wiserobot\Io\Api\RefundImportInterface
     public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
-        $writer = new Stream($logDir->getAbsolutePath('') . $this->logFile);
-        $logger = new Logger();
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);
+        $logger = new \Zend_Log();
         $logger->addWriter($writer);
         $logger->info(print_r($message, true));
 
