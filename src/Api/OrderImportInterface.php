@@ -31,5 +31,5 @@ interface OrderImportInterface
      * @param mixed $item_info
      * @return array
      */
-    public function import($store, $order_info, $payment_info, $shipping_info, $billing_info, $status_histories = [], $shipment_info = [], $refund_info = [], $item_info);
+    public function import($store, $order_info, $payment_info, $shipping_info, $billing_info, $item_info, $status_histories = [], $shipment_info = [], $refund_info = []);
 }
