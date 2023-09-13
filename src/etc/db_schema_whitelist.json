@@ -1,0 +1,49 @@
+{
+    "wr_io_product_image": {
+        "column": {
+            "id": true,
+            "sku": true,
+            "store_id": true,
+            "image": true,
+            "image_placement": true
+        },
+        "constraint": {
+            "PRIMARY": true
+        }
+    },
+    "wr_io_order": {
+        "column": {
+            "id": true,
+            "order_increment_id": true,
+            "io_order_id": true,
+            "marketplace": true,
+            "transaction_id": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "WR_IO_ORDER_ORDER_INCREMENT_ID": true,
+            "WR_IO_ORDER_IO_ORDER_ID": true
+        }
+    },
+    "sales_order": {
+        "column": {
+            "io_order_id": true,
+            "io_marketplace": true,
+            "ca_order_id": true,
+            "buyer_user_id": true
+        }
+    },
+    "sales_order_grid": {
+        "column": {
+            "io_order_id": true,
+            "io_marketplace": true,
+            "ca_order_id": true,
+            "buyer_user_id": true
+        }
+    },
+    "sales_order_item": {
+        "column": {
+            "site_order_item_id": true
+        }
+    }
+}

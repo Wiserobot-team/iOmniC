@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * WISEROBOT INDUSTRIES SDN. BHD. **NOTICE OF LICENSE**
+ * This source file is subject to the EULA that is bundled with this package in the file LICENSE.pdf
+ * It is also available through the world-wide-web at this URL: http://wiserobot.com/mage_extension_license.pdf
+ * =================================================================
+ * This package is designed for all versions of Magento
+ * =================================================================
+ * Copyright (c) 2019 WISEROBOT INDUSTRIES SDN. BHD. (http://www.wiserobot.com)
+ * License http://wiserobot.com/mage_extension_license.pdf
+ */
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <preference for="WiseRobot\Io\Api\ProductIoInterface" type="WiseRobot\Io\Model\ProductIo" />
+    <preference for="WiseRobot\Io\Api\ProductImportInterface" type="WiseRobot\Io\Model\ProductImport" />
+    <preference for="WiseRobot\Io\Api\OrderIoInterface" type="WiseRobot\Io\Model\OrderIo" />
+    <preference for="WiseRobot\Io\Api\OrderImportInterface" type="WiseRobot\Io\Model\OrderImport" />
+    <preference for="WiseRobot\Io\Api\PaymentIoInterface" type="WiseRobot\Io\Model\PaymentIo" />
+    <preference for="WiseRobot\Io\Api\ShippingIoInterface" type="WiseRobot\Io\Model\ShippingIo" />
+    <preference for="WiseRobot\Io\Api\ShipmentImportInterface" type="WiseRobot\Io\Model\ShipmentImport" />
+    <preference for="WiseRobot\Io\Api\RefundImportInterface" type="WiseRobot\Io\Model\RefundImport" />
+    <virtualType name="Magento\Sales\Model\ResourceModel\Order\Grid" type="Magento\Sales\Model\ResourceModel\Grid">
+        <arguments>
+            <argument name="columns" xsi:type="array">
+                <item name="io_order_id" xsi:type="string">sales_order.io_order_id</item>
+                <item name="ca_order_id" xsi:type="string">sales_order.io_order_id</item>
+                <item name="buyer_user_id" xsi:type="string">sales_order.buyer_user_id</item>
+                <item name="io_marketplace" xsi:type="string">sales_order.io_marketplace</item>
+            </argument>
+        </arguments>
+    </virtualType>
+</config>

@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * WISEROBOT INDUSTRIES SDN. BHD. **NOTICE OF LICENSE**
+ * This source file is subject to the EULA that is bundled with this package in the file LICENSE.pdf
+ * It is also available through the world-wide-web at this URL: http://wiserobot.com/mage_extension_license.pdf
+ * =================================================================
+ * This package is designed for all versions of Magento
+ * =================================================================
+ * Copyright (c) 2019 WISEROBOT INDUSTRIES SDN. BHD. (http://www.wiserobot.com)
+ * License http://wiserobot.com/mage_extension_license.pdf
+ */
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
+
+    <!-- Product Service -->
+    <route url="/V1/io/products" method="POST">
+        <service class="WiseRobot\Io\Api\ProductIoInterface" method="getList" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/products/import" method="POST">
+        <service class="WiseRobot\Io\Api\ProductImportInterface" method="import" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <!-- Order Service -->
+    <route url="/V1/io/orders" method="POST">
+        <service class="WiseRobot\Io\Api\OrderIoInterface" method="getList" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/orders/import" method="POST">
+        <service class="WiseRobot\Io\Api\OrderImportInterface" method="import" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/payment-methods" method="GET">
+        <service class="WiseRobot\Io\Api\PaymentIoInterface" method="getList" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/shipping-methods" method="GET">
+        <service class="WiseRobot\Io\Api\ShippingIoInterface" method="getList" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/shipments/import" method="POST">
+        <service class="WiseRobot\Io\Api\ShipmentImportInterface" method="import" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/refunds/import" method="POST">
+        <service class="WiseRobot\Io\Api\RefundImportInterface" method="import" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+</routes>

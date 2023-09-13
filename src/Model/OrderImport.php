@@ -1,0 +1,1751 @@
+<?php
+
+/**
+ * WISEROBOT INDUSTRIES SDN. BHD. **NOTICE OF LICENSE**
+ * This source file is subject to the EULA that is bundled with this package in the file LICENSE.pdf
+ * It is also available through the world-wide-web at this URL: http://wiserobot.com/mage_extension_license.pdf
+ * =================================================================
+ * This package is designed for all versions of Magento
+ * =================================================================
+ * Copyright (c) 2019 WISEROBOT INDUSTRIES SDN. BHD. (http://www.wiserobot.com)
+ * License http://wiserobot.com/mage_extension_license.pdf
+ */
+
+namespace WiseRobot\Io\Model;
+
+use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\Store\Model\StoreManagerInterface;
+use Magento\Framework\Filesystem;
+use Magento\Framework\App\Filesystem\DirectoryList;
+use Magento\Customer\Model\CustomerFactory;
+use Magento\Customer\Api\CustomerRepositoryInterface;
+use Magento\Catalog\Model\ProductFactory;
+use Magento\Quote\Model\Quote\Address\Rate as AddressRate;
+use Magento\Quote\Api\CartManagementInterface;
+use Magento\Quote\Api\CartRepositoryInterface;
+use Magento\Sales\Model\Order\ItemFactory;
+use Magento\Sales\Model\OrderFactory;
+use Magento\Directory\Model\RegionFactory;
+use Magento\Sales\Model\Order\PaymentFactory;
+use Magento\Quote\Api\Data\AddressInterfaceFactory;
+use Magento\Sales\Model\Order\AddressFactory;
+use Magento\Sales\Api\InvoiceManagementInterface;
+use Magento\Framework\DB\Transaction;
+use Magento\Sales\Model\Convert\Order as ConvertOrder;
+use Magento\Sales\Model\Order\Shipment\TrackFactory as ShipmentTrackFactory;
+use Magento\Sales\Model\Order\CreditmemoFactory;
+use Magento\Framework\Event\Manager as EventManager;
+use Magento\Catalog\Api\ProductRepositoryInterface;
+use Magento\Shipping\Model\Config as ShippingConfig;
+use Magento\Payment\Model\Config as PaymentConfig;
+use WiseRobot\Io\Model\IoOrderFactory;
+use WiseRobot\Io\Helper\Sku as SkuHelper;
+
+class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
+{
+    /**
+     * @var string
+     */
+    public $logFile = "wr_io_order_import.log";
+    /**
+     * @var bool
+     */
+    public $showLog = false;
+    /**
+     * @var array
+     */
+    public $results  = [];
+    /**
+     * @var ScopeConfigInterface
+     */
+    public $scopeConfig;
+    /**
+     * @var StoreManagerInterface
+     */
+    public $storeManager;
+    /**
+     * @var Filesystem
+     */
+    public $filesystem;
+    /**
+     * @var CustomerFactory
+     */
+    public $customerFactory;
+    /**
+     * @var CustomerRepositoryInterface
+     */
+    public $customerRepository;
+    /**
+     * @var ProductFactory
+     */
+    public $productFactory;
+    /**
+     * @var AddressRate
+     */
+    public $shippingRate;
+    /**
+     * @var CartManagementInterface
+     */
+    public $cartManagementInterface;
+    /**
+     * @var CartRepositoryInterface
+     */
+    public $cartRepositoryInterface;
+    /**
+     * @var ItemFactory
+     */
+    public $orderItemFactory;
+    /**
+     * @var OrderFactory
+     */
+    public $orderFactory;
+    /**
+     * @var RegionFactory
+     */
+    public $regionFactory;
+    /**
+     * @var PaymentFactory
+     */
+    public $paymentFactory;
+    /**
+     * @var AddressInterfaceFactory
+     */
+    public $addressInterfaceFactory;
+    /**
+     * @var AddressFactory
+     */
+    public $orderAddressFactory;
+    /**
+     * @var InvoiceManagementInterface
+     */
+    public $invoiceManagementInterface;
+    /**
+     * @var Transaction
+     */
+    public $transaction;
+    /**
+     * @var ConvertOrder
+     */
+    public $convertOrder;
+    /**
+     * @var ShipmentTrackFactory
+     */
+    public $shipmentTrackFactory;
+    /**
+     * @var CreditmemoFactory
+     */
+    public $creditMemoFactory;
+    /**
+     * @var EventManager
+     */
+    public $eventManager;
+    /**
+     * @var ProductRepositoryInterface
+     */
+    public $productRepository;
+    /**
+     * @var ShippingConfig
+     */
+    public $shippingConfig;
+    /**
+     * @var PaymentConfig
+     */
+    public $paymentConfig;
+    /**
+     * @var IoOrderFactory
+     */
+    public $ioOrderFactory;
+    /**
+     * @var SkuHelper
+     */
+    public $skuHelper;
+
+    /**
+     * @param ScopeConfigInterface $scopeConfig
+     * @param StoreManagerInterface $storeManager
+     * @param Filesystem $filesystem
+     * @param CustomerFactory $customerFactory
+     * @param CustomerRepositoryInterface $customerRepository
+     * @param ProductFactory $productFactory
+     * @param AddressRate $shippingRate
+     * @param CartManagementInterface $cartManagementInterface
+     * @param CartRepositoryInterface $cartRepositoryInterface
+     * @param ItemFactory $orderItemFactory
+     * @param OrderFactory $orderFactory
+     * @param RegionFactory $regionFactory
+     * @param PaymentFactory $paymentFactory
+     * @param AddressInterfaceFactory $addressInterfaceFactory
+     * @param AddressFactory $orderAddressFactory
+     * @param InvoiceManagementInterface $invoiceManagementInterface
+     * @param Transaction $transaction
+     * @param ConvertOrder $convertOrder
+     * @param ShipmentTrackFactory $shipmentTrackFactory
+     * @param CreditmemoFactory $creditMemoFactory
+     * @param EventManager $eventManager
+     * @param ProductRepositoryInterface $productRepository
+     * @param ShippingConfig $shippingConfig
+     * @param PaymentConfig $paymentConfig
+     * @param IoOrderFactory $ioOrderFactory
+     * @param SkuHelper $skuHelper
+     */
+    public function __construct(
+        ScopeConfigInterface               $scopeConfig,
+        StoreManagerInterface              $storeManager,
+        Filesystem                         $filesystem,
+        CustomerFactory                    $customerFactory,
+        CustomerRepositoryInterface        $customerRepository,
+        ProductFactory                     $productFactory,
+        AddressRate                        $shippingRate,
+        CartManagementInterface            $cartManagementInterface,
+        CartRepositoryInterface            $cartRepositoryInterface,
+        ItemFactory                        $orderItemFactory,
+        OrderFactory                       $orderFactory,
+        RegionFactory                      $regionFactory,
+        PaymentFactory                     $paymentFactory,
+        AddressInterfaceFactory            $addressInterfaceFactory,
+        AddressFactory                     $orderAddressFactory,
+        InvoiceManagementInterface         $invoiceManagementInterface,
+        Transaction                        $transaction,
+        ConvertOrder                       $convertOrder,
+        ShipmentTrackFactory               $shipmentTrackFactory,
+        CreditmemoFactory                  $creditMemoFactory,
+        EventManager                       $eventManager,
+        ProductRepositoryInterface         $productRepository,
+        ShippingConfig                     $shippingConfig,
+        PaymentConfig                      $paymentConfig,
+        IoOrderFactory                     $ioOrderFactory,
+        SkuHelper                          $skuHelper
+    ) {
+        $this->scopeConfig                 = $scopeConfig;
+        $this->storeManager                = $storeManager;
+        $this->filesystem                  = $filesystem;
+        $this->customerFactory             = $customerFactory;
+        $this->customerRepository          = $customerRepository;
+        $this->productFactory              = $productFactory;
+        $this->shippingRate                = $shippingRate;
+        $this->cartManagementInterface     = $cartManagementInterface;
+        $this->cartRepositoryInterface     = $cartRepositoryInterface;
+        $this->orderItemFactory            = $orderItemFactory;
+        $this->orderFactory                = $orderFactory;
+        $this->regionFactory               = $regionFactory;
+        $this->paymentFactory              = $paymentFactory;
+        $this->addressInterfaceFactory     = $addressInterfaceFactory;
+        $this->orderAddressFactory         = $orderAddressFactory;
+        $this->invoiceManagementInterface  = $invoiceManagementInterface;
+        $this->transaction                 = $transaction;
+        $this->convertOrder                = $convertOrder;
+        $this->shipmentTrackFactory        = $shipmentTrackFactory;
+        $this->creditMemoFactory           = $creditMemoFactory;
+        $this->eventManager                = $eventManager;
+        $this->productRepository           = $productRepository;
+        $this->shippingConfig              = $shippingConfig;
+        $this->paymentConfig               = $paymentConfig;
+        $this->ioOrderFactory              = $ioOrderFactory;
+        $this->skuHelper                   = $skuHelper;
+    }
+
+    /**
+     * Import Order by Order Data
+     *
+     * @param array $store
+     * @param array $orderInfo
+     * @param array $paymentInfo
+     * @param array $shippingInfo
+     * @param array $billingInfo
+     * @param array $itemInfo
+     * @param array $statusHistories
+     * @param array $shipmentInfo
+     * @param array $refundInfo
+     * @return array
+     */
+    public function import(
+        $store,
+        $orderInfo,
+        $paymentInfo,
+        $shippingInfo,
+        $billingInfo,
+        $itemInfo,
+        $statusHistories = [],
+        $shipmentInfo = [],
+        $refundInfo = []
+    ) {
+        // response messages
+        $this->results["response"]["data"]["success"] = [];
+        $this->results["response"]["data"]["error"]   = [];
+        $this->results["response"]["item"]["success"] = [];
+        $this->results["response"]["item"]["error"]   = [];
+
+        $errorMess = "data request error";
+
+        // store info
+        if (!$store) {
+            $message = "Field: 'store' is a required field";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        try {
+            $storeInfo = $this->storeManager->getStore($store);
+        } catch (\Exception $e) {
+            $message = "Requested 'store' " . $store . " doesn't exist";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+
+        // order info
+        if (!$orderInfo) {
+            $message = "Field: 'order_info' is a required field";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        if (!isset($orderInfo["io_order_id"]) || !$orderInfo["io_order_id"]) {
+            $message = "Field: 'order_info' - 'io_order_id' data is a required";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        if (!isset($orderInfo["ca_order_id"]) || !$orderInfo["ca_order_id"]) {
+            $message = "Field: 'order_info' - 'ca_order_id' data is a required";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        if (!isset($orderInfo["order_time_gmt"]) || !$orderInfo["order_time_gmt"]
+            || !isset($orderInfo["email"]) || !$orderInfo["email"]
+            || !isset($orderInfo["item_sale_source"]) || !$orderInfo["item_sale_source"]
+            || !isset($orderInfo["checkout_status"]) || !$orderInfo["checkout_status"]
+            || !isset($orderInfo["shipping_status"]) || !$orderInfo["shipping_status"]
+            || !isset($orderInfo["refund_status"]) || !$orderInfo["refund_status"]
+            || !isset($orderInfo["grand_total"]) || !isset($orderInfo["tax_amount"])
+            || !isset($orderInfo["shipping_amount"]) || !isset($orderInfo["shipping_tax_amount"])
+            || !isset($orderInfo["discount_amount"])) {
+            $message = "Field: 'order_info' - {'order_time_gmt', 'email', 'item_sale_source', 'grand_total'
+            , 'tax_amount', 'shipping_amount', 'shipping_tax_amount', 'discount_amount'
+            , 'checkout_status', 'shipping_status', 'refund_status'} data fields are required";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+
+        // payment info
+        if (!$paymentInfo) {
+            $message = "Field: 'payment_info' is a required field";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        if (!isset($paymentInfo["payment_method"]) || !$paymentInfo["payment_method"] ||
+            !isset($paymentInfo["cc_last4"])) {
+            $message = "Field: 'payment_info' - {'payment_method', 'cc_last4'} data fields are required";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+
+        // shipping info
+        if (!$shippingInfo) {
+            $message = "Field: 'shipping_info' is a required field";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        if (!isset($shippingInfo["firstname"]) || !isset($shippingInfo["lastname"]) ||
+            !isset($shippingInfo["company"]) || !isset($shippingInfo["street"]) ||
+            !isset($shippingInfo["city"]) || !isset($shippingInfo["region_id"]) ||
+            !isset($shippingInfo["country_id"]) || !isset($shippingInfo["region"]) ||
+            !isset($shippingInfo["postcode"]) || !isset($shippingInfo["telephone"]) ||
+            !isset($shippingInfo["shipping_method"])) {
+            $message = "Field: 'shipping_info' - {'firstname', 'lastname', 'company', 'street', 'city', 'region_id'
+            , 'country_id', 'region', 'postcode', 'telephone', 'shipping_method'} data fields are required";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+
+        // billing info
+        if (!$billingInfo) {
+            $message = "Field: 'billing_info' is a required field";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        if (!isset($billingInfo["firstname"]) || !isset($billingInfo["lastname"]) ||
+            !isset($billingInfo["company"]) || !isset($billingInfo["street"]) ||
+            !isset($billingInfo["city"]) || !isset($billingInfo["region_id"]) ||
+            !isset($billingInfo["country_id"]) || !isset($billingInfo["region"]) ||
+            !isset($billingInfo["postcode"]) || !isset($billingInfo["telephone"])) {
+            $message = "Field: 'billing_info' - {'firstname', 'lastname', 'company', 'street', 'city', 'region_id'
+            , 'country_id', 'region', 'postcode', 'telephone'} data fields are required";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+
+        // item info
+        if (!$itemInfo || !count($itemInfo)) {
+            $message = "Field: 'item_info' is a required field";
+            $this->results["response"]["item"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+        foreach ($itemInfo as $item) {
+            if (!isset($item["id"]) || !isset($item["sku"]) || !$item["sku"] ||
+                !isset($item["name"]) || !$item["name"] || !isset($item["price"]) ||
+                !isset($item["qty"]) || !isset($item["tax_percent"]) || !isset($item["tax_amount"]) ||
+                !isset($item["weight"]) || !isset($item["buyer_user_id"])) {
+                $message = "Field: 'item_info' - {'id', 'sku', 'name', 'price', 'qty', 'tax_percent'
+                , 'tax_amount', 'weight', 'buyer_user_id'} data fields are required";
+                $this->results["response"]["item"]["error"][] = $message;
+                $this->log("ERROR: " . $message);
+                $this->cleanResponseMessages();
+                throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+            }
+        }
+
+        // import io order
+        try {
+            $this->importIoOrder(
+                $orderInfo,
+                $paymentInfo,
+                $shippingInfo,
+                $billingInfo,
+                $statusHistories,
+                $shipmentInfo,
+                $refundInfo,
+                $itemInfo,
+                $storeInfo
+            );
+            $this->cleanResponseMessages();
+            return $this->results;
+        } catch (\Exception $e) {
+            $errorMess = "order import error";
+            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+        }
+    }
+
+    /**
+     * Import Io Order
+     *
+     * @param array $orderInfo
+     * @param array $paymentInfo
+     * @param array $shippingInfo
+     * @param array $billingInfo
+     * @param array $statusHistories
+     * @param array $shipmentInfo
+     * @param array $refundInfo
+     * @param array $itemInfo
+     * @param int $store
+     * @return bool|null
+     */
+    public function importIoOrder(
+        $orderInfo,
+        $paymentInfo,
+        $shippingInfo,
+        $billingInfo,
+        $statusHistories,
+        $shipmentInfo,
+        $refundInfo,
+        $itemInfo,
+        $store
+    ) {
+        $storeId        = $store->getId();
+        $ioOrderId      = $orderInfo["io_order_id"];
+        $caOrderId      = $orderInfo["ca_order_id"];
+        $buyerUserID    = "";
+        $itemSaleSource = $orderInfo["item_sale_source"];
+
+        try {
+            // order items
+            $orderItemsWeightTotal = 0;
+            $orderItemsQtyTotal    = 0;
+            $orderSubtotal         = 0;
+
+            if (!is_array($itemInfo)) {
+                $itemInfo = [$itemInfo];
+            }
+
+            $ioOrderItems = [];
+            foreach ($itemInfo as $orderItem) {
+                $sku         = $orderItem["sku"];
+                $buyerUserID = $orderItem["buyer_user_id"];
+                if (!isset($ioOrderItems[$sku])) {
+                    $ioOrderItems[$sku]  = $orderItem;
+                }
+            }
+
+            // check if an order already exists
+            $oldIoOrder = $this->ioOrderFactory->create();
+            $oldIoOrder->load($ioOrderId, "io_order_id");
+
+            $isOldOrder      = false;
+            $skuIsMissing    = false;
+            $refundStatus    = $orderInfo["refund_status"];
+            if ($oldIoOrder->getId()) {
+                $oldOrderIId = $oldIoOrder->getData("order_increment_id");
+                $oldOrder    = $this->orderFactory->create()->loadByIncrementId($oldOrderIId);
+                if (!$oldOrder || !$oldOrder->getId()) {
+                    $message = "WARN cannot load order <" . $oldOrderIId . ">";
+                    $this->results["response"]["data"]["error"][] = $message;
+                    $this->log($message);
+                    return null;
+                }
+                if ($oldOrder->getStatus() == "closed") {
+                    $message = "Skip order " . $ioOrderId . " update to <" .
+                        $oldOrderIId . "> for order has been closed";
+                    $this->results["response"]["data"]["success"][] = $message;
+                    $this->log($message);
+                    return null;
+                }
+                if ($oldOrder->hasShipments()) {
+                    $message = "Skip order " . $ioOrderId . " update to <" .
+                        $oldOrderIId . "> for order has been shipped";
+                    $this->results["response"]["data"]["success"][] = $message;
+                    $this->log($message);
+                    // create credit memo for order
+                    if ($refundStatus && $refundStatus != "unrefunded" && count($refundInfo)) {
+                        $this->createCreditMemo($oldOrderIId, $refundInfo);
+                        $orderObject = $this->orderFactory->create()
+                            ->loadByIncrementId($oldOrder->getIncrementId());
+                        if ($orderObject->hasShipments() && $orderObject->getStatus() != "closed" &&
+                            in_array($orderObject->getStatus(), ["complete"])) {
+                            $orderObject->setData("status", "closed");
+                            $orderObject->setData("state", "closed");
+                            $orderObject->save();
+                        }
+                    }
+                    return null;
+                } else {
+                    // check and create credit memo for order
+                    if ($refundStatus && $refundStatus != "unrefunded" && count($refundInfo)) {
+                        $this->createCreditMemo($oldOrderIId, $refundInfo);
+                        $orderObject = $this->orderFactory->create()
+                            ->loadByIncrementId($oldOrder->getIncrementId());
+                        if (!$orderObject->hasShipments() && $orderObject->getStatus() != "closed" &&
+                            in_array($orderObject->getStatus(), ["processing"])) {
+                            $orderObject->setData("status", "closed");
+                            $orderObject->setData("state", "closed");
+                            $orderObject->save();
+                        }
+                        return null;
+                    }
+                    if ($oldOrder->getStatus() == "canceled") {
+                        $message = "Skip order " . $ioOrderId . " update to <" .
+                            $oldOrderIId . "> for order has been canceled";
+                        $this->results["response"]["data"]["success"][] = $message;
+                        $this->log($message);
+                        return null;
+                    }
+                    if ($orderInfo["checkout_status"] != "canceled") {
+                        $message = "Order " . $ioOrderId . " updated into <" . $oldOrderIId . ">";
+                        $this->results["response"]["data"]["success"][] = $message;
+                        $this->log($message);
+                        return null;
+                    }
+                }
+                $isOldOrder = true;
+                $cart       = $oldOrder;
+                // create shipment for order
+                if ($orderInfo["checkout_status"] != "canceled" && $orderInfo["shipping_status"] == "shipped") {
+                    $this->createShipment($oldOrder, $orderInfo, $shipmentInfo);
+                    return null;
+                }
+            } else {
+                $skuIsMissing = $this->isSkuInOrderMissing($ioOrderItems, $storeId);
+                if ($skuIsMissing) {
+                    // create order object if the SKU not found, bypass checkout flow
+                    $cart   = $this->orderFactory->create();
+                } else {
+                    // create cart object if no SKU missing, like normally checkout
+                    $cartId = $this->cartManagementInterface->createEmptyCart();
+                    $cart   = $this->cartRepositoryInterface->get($cartId);
+                }
+                $cart->setStoreId($storeId);
+            }
+
+            // shipping, billing address info
+            if (!$isOldOrder) {
+                if ($skuIsMissing) {
+                    $shippingAddress = $this->getShippingAddress($shippingInfo, $storeId, 0);
+                    $billingAddress  = $this->getBillingAddress($billingInfo, $shippingInfo, $storeId, 0);
+                } else {
+                    $shippingAddress = $this->getShippingAddress($shippingInfo, $storeId);
+                    $billingAddress  = $this->getBillingAddress($billingInfo, $shippingInfo, $storeId);
+                }
+            } else {
+                $shippingAddress = $this->getShippingAddress($shippingInfo, $storeId, 0);
+                $billingAddress  = $this->getBillingAddress($billingInfo, $shippingInfo, $storeId, 0);
+            }
+
+            $customerEmail = $orderInfo["email"];
+
+            // find customer in magento
+            $customer = $this->customerFactory->create();
+            $customer->setWebsiteId($store->getWebsiteId())
+                     ->loadByEmail($customerEmail);
+
+            if (trim((string) $shippingInfo["lastname"]) == "") {
+                $lastnameValid = " unknown";
+            } else {
+                $lastnameValid = $shippingInfo["lastname"];
+            }
+
+            if (trim((string) $shippingInfo["firstname"]) == "") {
+                $firstnameValid = $lastnameValid;
+            } else {
+                $firstnameValid = $shippingInfo["firstname"];
+            }
+
+            if ($customer->getEntityId()) { // if existing customer
+                $customer = $this->customerRepository->getById($customer->getEntityId());
+                // update customer info
+                if (!$customer->getFirstname() || !$customer->getLastname()) {
+                    $customer->setFirstname($firstnameValid);
+                    $customer->setLastname($lastnameValid);
+                    try {
+                        $this->customerRepository->save($customer);
+                    } catch (\Exception $e) {
+                        $message = "Order " . $ioOrderId . ": update customer " . $e->getMessage();
+                        $this->results["response"]["data"]["error"][] = $message;
+                        $this->log("ERROR " . $message);
+                        $this->cleanResponseMessages();
+                        throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
+                    }
+                }
+                if (!$isOldOrder) {
+                    if (!$skuIsMissing) {
+                        $cart->assignCustomer($customer);
+                    }
+                }
+                $cart->setCustomerIsGuest(0)
+                    ->setCustomerId($customer->getId())
+                    ->setCustomerGroupId($customer->getGroupId())
+                    ->setCustomerFirstname($customer->getFirstname())
+                    ->setCustomerLastname($customer->getLastname())
+                    ->setCustomerEmail($customer->getEmail());
+            } else { // else no customer exist
+                $cart->setCustomerIsGuest(1)
+                    ->setCustomerFirstname($firstnameValid)
+                    ->setCustomerLastname($lastnameValid)
+                    ->setCustomerGroupId(0)
+                    ->setCustomerEmail($customerEmail);
+            }
+
+            // item data will not be changed for already imported order
+            if (!$isOldOrder) {
+                foreach ($ioOrderItems as $orderItem) {
+                    // add order item
+                    $webOrderItem = $this->getOrderItem($orderItem, $storeId);
+                    if (!$webOrderItem) {
+                        $this->results["response"]["item"]["error"][] = "order " . $ioOrderId . " has invalid item";
+                        $this->log("WARN order " . $ioOrderId . " has invalid item");
+                        return false;
+                    }
+                    $orderItemsWeightTotal += (float) $orderItem["weight"];
+                    $orderItemsQtyTotal    += (int) $orderItem["qty"];
+                    $orderSubtotal         += ((float) $orderItem["qty"] * $webOrderItem->getData('price'));
+
+                    if ($skuIsMissing) {
+                        $cart->addItem($webOrderItem);
+                        continue;
+                    }
+                    $product = $this->productRepository->getById(
+                        $webOrderItem['product_id'],
+                        false,
+                        $store->getId()
+                    );
+
+                    try {
+                        $item = $cart->addProduct($product, (int)$webOrderItem['qty_ordered']);
+                        if (is_string($item)) {
+                            $message = "Order " . $ioOrderId . " product '" . $product->getSku() . "': " . $item;
+                            $this->results["response"]["item"]["error"][] = $message;
+                            $this->log("ERROR " . $message);
+                            $this->eventManager->dispatch(
+                                'io_order_import_error',
+                                [
+                                    'order_client_id' => $ioOrderId,
+                                    'sku'             => $product->getSku(),
+                                    'product_id'      => $product->getId(),
+                                    'error'           => $message
+                                ]
+                            );
+                            return false;
+                        }
+                        $item->setCustomPrice($webOrderItem['price']);
+                        $item->setOriginalCustomPrice($webOrderItem['price']);
+                        $item->setIsSuperMode(true);
+                    } catch (\Exception $e) {
+                        $message = "Order " . $ioOrderId . " product '" .
+                            $product->getSku() . "': " . $e->getMessage();
+                        $this->results["response"]["item"]["error"][] = $message;
+                        $this->log("ERROR " . $message);
+                        $this->cleanResponseMessages();
+                        $this->eventManager->dispatch(
+                            'io_order_import_error',
+                            [
+                                'order_client_id' => $ioOrderId,
+                                'sku'             => $product->getSku(),
+                                'product_id'      => $product->getId(),
+                                'error'           => $message
+                            ]
+                        );
+                        throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
+                    }
+                }
+            }
+
+            // set shipping, billing address to cart
+            if (!$isOldOrder) {
+                if ($skuIsMissing) {
+                    $shippingAddress->setOrder($cart);
+                    $billingAddress->setOrder($cart);
+                    $cart->setShippingAddress($shippingAddress);
+                    $cart->setBillingAddress($billingAddress);
+                } else {
+                    $cart->getShippingAddress()->addData($shippingAddress->getData());
+                    $cart->getBillingAddress()->addData($billingAddress->getData());
+                }
+            } else {
+                $shippingAddress->setOrder($cart);
+                $billingAddress->setOrder($cart);
+                $cart->setShippingAddress($shippingAddress);
+                $cart->setBillingAddress($billingAddress);
+            }
+
+            // set shipping method
+            $mageShippingMethods = $this->getMagentoShippingMethods();
+            if (!count($mageShippingMethods)) {
+                $mageShippingMethods = $this->getAllMagentoShippingMethods();
+            }
+            $defaultShippingMethod = key($mageShippingMethods);
+            $ioShippingMethod      = $shippingInfo["shipping_method"];
+            if (!$ioShippingMethod || !isset($mageShippingMethods[$ioShippingMethod])) {
+                $ioShippingMethod  = $defaultShippingMethod;
+            }
+            $ioShippingDescription = $mageShippingMethods[$ioShippingMethod];
+
+            if ($ioShippingMethod && $ioShippingDescription) {
+                if (!$isOldOrder) {
+                    if ($skuIsMissing) {
+                        $cart->setData("shipping_method", $ioShippingMethod);
+                        $cart->setData("shipping_description", $ioShippingDescription);
+                    } else {
+                        $this->shippingRate->setCode($ioShippingMethod)
+                                           ->getPrice(1);
+                        $shippingAddress = $cart->getShippingAddress();
+                        $shippingAddress->setCollectShippingRates(true)
+                                        ->collectShippingRates();
+                        $cart->setTotalsCollectedFlag(false)
+                             ->collectTotals();
+                        $shippingAddress->setShippingMethod($ioShippingMethod)
+                                        ->setShippingDescription($ioShippingDescription);
+                        $cart->getShippingAddress()->addShippingRate($this->shippingRate);
+                    }
+                } else {
+                    $cart->setData("shipping_method", $ioShippingMethod);
+                    $cart->setData("shipping_description", $ioShippingDescription);
+                }
+            }
+
+            // add payment for new order only
+            if (!$isOldOrder) {
+                $paymentInfo = $this->getPaymentInfo($paymentInfo);
+                if ($skuIsMissing) {
+                    $cart->setPayment($paymentInfo);
+                } else {
+                    $cart->setPaymentMethod($paymentInfo->getData("method"));
+                    $cart->setInventoryProcessed(false);
+                    $orderPayment = [
+                        "method"   => $paymentInfo->getData("method"),
+                        "cc_last4" => $paymentInfo->getData("cc_last4"),
+                    ];
+                    $cart->getPayment()->addData($orderPayment);
+                }
+            }
+
+            $cart->setCanSendNewEmailFlag(false);
+            if (!$isOldOrder) {
+                if ($skuIsMissing) {
+                    $newOrder = $cart;
+                } else {
+                    $cart->collectTotals();
+                    $cart->save();
+                    $cart     = $this->cartRepositoryInterface->get($cart->getId());
+                    $orderID  = $this->cartManagementInterface->placeOrder($cart->getId());
+                    $newOrder = $this->orderFactory->create()->load($orderID);
+                }
+            } else {
+                $newOrder = $cart;
+            }
+
+            // re-add shipping method if order is created by cart
+            if (!$isOldOrder && !$skuIsMissing && $ioShippingMethod && $ioShippingDescription) {
+                $newOrder->setData("shipping_method", $ioShippingMethod);
+                $newOrder->setData("shipping_description", $ioShippingDescription);
+            }
+
+            // update order items
+            if (!$isOldOrder && !$skuIsMissing) {
+                foreach ($ioOrderItems as $orderItem) {
+                    $webOrderItem   = $this->getOrderItem($orderItem, $storeId);
+                    $mageOrderItems = $newOrder->getItemsCollection();
+                    if (!$mageOrderItems) {
+                        continue;
+                    }
+                    foreach ($mageOrderItems as $mageOrderItem) {
+                        $productId = $mageOrderItem->getProductId();
+                        if ($productId && $productId == $webOrderItem['product_id']) {
+                            $updateItem = $this->updateOrderItemCalculation($mageOrderItem, $webOrderItem);
+                            $updateItem->save();
+                        }
+                    }
+                }
+            }
+
+            // order status info
+            if ($orderInfo["checkout_status"] == "canceled") {
+                $status = "canceled";
+                $state  = "canceled";
+            } elseif ($orderInfo["checkout_status"] == "completed") {
+                $status = "processing";
+                $state  = "processing";
+            } else {
+                $status = "pending";
+                $state  = "new";
+            }
+            $newOrder->setData("status", $status);
+            $newOrder->setData("state", $state);
+
+            // shipping info
+            $shippingAmount = $orderInfo["shipping_amount"] ? : 0;
+            $newOrder->setData("base_shipping_amount", $shippingAmount);
+            $newOrder->setData("shipping_amount", $shippingAmount);
+            $newOrder->setData("base_shipping_incl_tax", $shippingAmount);
+            $newOrder->setData("shipping_incl_tax", $shippingAmount);
+
+            // order invoice info
+            if (!$isOldOrder) {
+                $newOrder->setData("grand_total", $orderInfo["grand_total"]);
+                $newOrder->setData("base_grand_total", $orderInfo["grand_total"]);
+                $newOrder->setData("weight", $orderItemsWeightTotal);
+                $newOrder->setData("subtotal", $orderSubtotal);
+                $newOrder->setData("base_subtotal", $orderSubtotal);
+                $newOrder->setData("subtotal_incl_tax", $orderSubtotal);
+                $newOrder->setData("base_subtotal_incl_tax", $orderSubtotal);
+
+                $newOrder->setData("tax_amount", $orderInfo["tax_amount"]);
+                $newOrder->setData("base_tax_amount", $orderInfo["tax_amount"]);
+
+                $currencyCode = $store->getCurrentCurrencyCode();
+
+                $newOrder->setData("base_shipping_amount", $orderInfo["shipping_amount"]);
+                $newOrder->setData("shipping_amount", $orderInfo["shipping_amount"]);
+                $newOrder->setData("shipping_tax_amount", $orderInfo["shipping_tax_amount"]);
+                $newOrder->setData("base_shipping_tax_amount", $orderInfo["shipping_tax_amount"]);
+
+                $newOrder->setData('base_currency_code', $currencyCode);
+                $newOrder->setData('store_currency_code', $currencyCode);
+                $newOrder->setData('order_currency_code', $currencyCode);
+                $newOrder->setData('global_currency_code', $currencyCode);
+                $newOrder->setData("is_virtual", 0);
+                $newOrder->setData("total_qty_ordered", $orderItemsQtyTotal);
+                $newOrder->setData("base_total_qty_ordered", $orderItemsQtyTotal);
+
+                $newOrder->setData("discount_amount", $orderInfo["discount_amount"]);
+                $newOrder->setData("base_discount_amount", $orderInfo["discount_amount"]);
+
+                $newOrder->setData("base_to_global_rate", 1);
+
+                if ($orderInfo["order_time_gmt"]) {
+                    $newOrder->setData("created_at", $orderInfo["order_time_gmt"]);
+                }
+            }
+
+            // set custom order columns
+            $newOrder->setData("io_order_id", $ioOrderId);
+            $newOrder->setData("ca_order_id", $caOrderId);
+            $newOrder->setData("buyer_user_id", $buyerUserID);
+            $newOrder->setData("io_marketplace", $itemSaleSource);
+
+            // add comment
+            if (!$isOldOrder) {
+                $statusMessage  = "Marketplace: " . $itemSaleSource . ", ChannelAdvisor Order ID: " .
+                    $caOrderId . ", Site Order ID: " . $ioOrderId . ", Buyer User ID: " . $buyerUserID;
+                $newOrder->addStatusHistoryComment($statusMessage);
+            }
+
+            // status histories
+            if (count($statusHistories)) {
+                foreach ($statusHistories as $statusHistory) {
+                    if (!isset($statusHistory["comment"]) || !$statusHistory["comment"]) {
+                        continue;
+                    }
+                    $commentString = $statusHistory["comment"];
+                    $orderComments = $newOrder->getAllStatusHistory();
+                    // check if order has the comment already
+                    $addedComment  = false;
+                    foreach ($orderComments as $orderComment) {
+                        $existingComment = $orderComment->getData("comment");
+                        if ($existingComment == $commentString) {
+                            $addedComment = true;
+                            break;
+                        }
+                    }
+                    if ($addedComment == false) {
+                        $newOrder->addStatusHistoryComment($commentString);
+                    }
+                }
+            }
+
+            // save order
+            $savedOrder = $newOrder->save();
+
+            // save order id, io order id, marketplace
+            $oldIoOrder->setData("order_increment_id", $newOrder->getIncrementId());
+            $oldIoOrder->setData("io_order_id", $ioOrderId);
+            $oldIoOrder->setData("marketplace", $itemSaleSource);
+            if ($status == "canceled" || $state == "canceled") {
+                $oldIoOrder->setData("status", $status);
+                $oldIoOrder->setData("state", $state);
+            }
+            $oldIoOrder->save();
+
+            if ($isOldOrder) {
+                if ($status == "canceled" || $state == "canceled") {
+                    $message = "Order " . $ioOrderId . " updated into <" .
+                        $savedOrder->getIncrementId() . "> has been canceled";
+                    $this->results["response"]["data"]["success"][] = $message;
+                    $this->log($message);
+                } else {
+                    $message = "Order " . $ioOrderId . " updated into <" . $savedOrder->getIncrementId() . ">";
+                    $this->results["response"]["data"]["success"][] = $message;
+                    $this->log($message);
+                }
+            } else {
+                $message = "Order " . $ioOrderId . " imported into <" . $savedOrder->getIncrementId() . ">";
+                $this->results["response"]["data"]["success"][] = $message;
+                $this->log($message);
+            }
+
+            if ($state != "canceled") {
+                // create invoice for order
+                $this->createInvoice($savedOrder);
+                // create shipment for order
+                if ($orderInfo["shipping_status"] == "shipped") {
+                    $this->createShipment($savedOrder, $orderInfo, $shipmentInfo);
+                }
+            }
+
+            // create credit memo for order
+            if ($refundStatus && $refundStatus != "unrefunded" && count($refundInfo)) {
+                $this->createCreditMemo($savedOrder->getIncrementId(), $refundInfo);
+            }
+            // create order completed
+            return true;
+        } catch (\Exception $e) {
+            $message = "Order " . $ioOrderId . ": " . $e->getMessage();
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR " . $message);
+            $this->cleanResponseMessages();
+            throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
+        }
+    }
+
+    /**
+     * Get Order Shipping Address
+     *
+     * @param array $shippingInfo
+     * @param int $storeId
+     * @param bool $create
+     * @return Magento\Sales\Model\Order\AddressFactory
+     */
+    public function getShippingAddress($shippingInfo, $storeId, $create = 1)
+    {
+        $countryCode = $shippingInfo["country_id"];
+        if ($shippingInfo["country_id"] == "PR") {
+            $countryCode = "US";
+            $shippingInfo["region_id"] = "PR";
+        }
+        $data = [
+            "firstname"  => $shippingInfo["firstname"],
+            "lastname"   => $shippingInfo["lastname"],
+            "company"    => $shippingInfo["company"],
+            "street"     => $shippingInfo["street"],
+            "city"       => $shippingInfo["city"],
+            "region_id"  => $shippingInfo["region_id"],
+            "country_id" => $countryCode,
+            "region"     => $shippingInfo["region"],
+            "postcode"   => $shippingInfo["postcode"],
+            "telephone"  => $shippingInfo["telephone"],
+        ];
+
+        if (trim((string) $data["telephone"]) == "") {
+            $data["telephone"] = 0000;
+        }
+        if (trim((string) $data["lastname"]) == "") {
+            $data["lastname"] = " unknown";
+        }
+        if (trim((string) $data["firstname"]) == "") {
+            $data["firstname"] = $data["lastname"];
+        }
+
+        if ($countryCode && $shippingInfo["region_id"]) {
+            $regionModel = $this->regionFactory->create()
+                ->loadByCode($shippingInfo["region_id"], $countryCode);
+            if ($regionModel->getId()) {
+                $data["region_id"] = $regionModel->getId();
+                $data["region"]    = $regionModel->getData("name");
+            } else {
+                $data["region_id"] = null;
+            }
+        }
+
+        if ($create) {
+            $shippingAddress = $this->addressInterfaceFactory->create();
+        } else {
+            $shippingAddress = $this->orderAddressFactory->create();
+        }
+
+        $data = $this->fixAddressData($data);
+
+        $shippingAddress->setStoreId($storeId);
+        $shippingAddress->setData($data);
+
+        return $shippingAddress;
+    }
+
+    /**
+     * Get Order Billing Address
+     *
+     * @param array $billingInfo
+     * @param array $shippingInfo
+     * @param int $storeId
+     * @param bool $create
+     * @return Magento\Sales\Model\Order\AddressFactory
+     */
+    public function getBillingAddress($billingInfo, $shippingInfo, $storeId, $create = 1)
+    {
+        if ((!$billingInfo["country_id"]) || ($billingInfo["country_id"] == "  ")) {
+            $countryCode = $shippingInfo["country_id"];
+            if ($countryCode == "PR") {
+                $countryCode = "US";
+                $billingInfo["region_id"] = "PR";
+            }
+        } else {
+            $countryCode = $billingInfo["country_id"];
+            if ($countryCode == "PR") {
+                $countryCode = "US";
+                $billingInfo["region_id"] = "PR";
+            }
+        }
+
+        if (!$billingInfo["firstname"]) {
+            $firstName = $shippingInfo["firstname"];
+        } else {
+            $firstName = $billingInfo["firstname"];
+        }
+
+        if (!$billingInfo["lastname"]) {
+            $lastName = $shippingInfo["lastname"];
+        } else {
+            $lastName = $billingInfo["lastname"];
+        }
+
+        if (!$billingInfo["company"]) {
+            $companyName = $shippingInfo["company"];
+        } else {
+            $companyName = $billingInfo["company"];
+        }
+
+        $billingStreetAddr = $billingInfo["street"];
+        $shipingStreetAddr = $shippingInfo["street"];
+        if (!$billingStreetAddr) {
+            $address = $shipingStreetAddr;
+        } else {
+            $address = $billingStreetAddr;
+        }
+
+        if (!$billingInfo["city"]) {
+            $city = $shippingInfo["city"];
+        } else {
+            $city = $billingInfo["city"];
+        }
+
+        if (!$billingInfo["region_id"]) {
+            $region = $shippingInfo["region_id"];
+        } else {
+            $region = $billingInfo["region_id"];
+        }
+
+        if (!$billingInfo["region"]) {
+            $regionDescription = $shippingInfo["region"];
+        } else {
+            $regionDescription = $billingInfo["region"];
+        }
+
+        if (!$billingInfo["postcode"]) {
+            $postalCode = $shippingInfo["postcode"];
+        } else {
+            $postalCode = $billingInfo["postcode"];
+        }
+
+        if (!$billingInfo["telephone"]) {
+            $phoneNumberDay = $shippingInfo["telephone"];
+        } else {
+            $phoneNumberDay = $billingInfo["telephone"];
+        }
+
+        if (trim((string) $phoneNumberDay) == "") {
+            $phoneNumberDay = 0000;
+        }
+        if (trim((string) $lastName) == "") {
+            $lastName = " unknown";
+        }
+        if (trim((string) $firstName) == "") {
+            $firstName = $lastName;
+        }
+
+        $data = [
+            "firstname"  => $firstName,
+            "lastname"   => $lastName,
+            "company"    => $companyName,
+            "street"     => $address,
+            "city"       => $city,
+            "region_id"  => $region,
+            "country_id" => $countryCode,
+            "region"     => $regionDescription,
+            "postcode"   => $postalCode,
+            "telephone"  => $phoneNumberDay,
+        ];
+
+        if ($countryCode && $region) {
+            $regionModel = $this->regionFactory->create()
+                ->loadByCode($region, $countryCode);
+            if ($regionModel->getId()) {
+                $data["region_id"] = $regionModel->getId();
+                $data["region"]    = $regionModel->getData("name");
+            } else {
+                $data["region_id"] = null;
+            }
+        }
+
+        if ($create) {
+            $billingAddress = $this->addressInterfaceFactory->create();
+        } else {
+            $billingAddress = $this->orderAddressFactory->create();
+        }
+
+        $data = $this->fixAddressData($data);
+
+        $billingAddress->setStoreId($storeId);
+        $billingAddress->setData($data);
+
+        return $billingAddress;
+    }
+
+    /**
+     * Fix Order Address Data
+     *
+     * @param array $data
+     * @return array
+     */
+    public function fixAddressData($data)
+    {
+        $regionCode = "";
+        if ($data['country_id'] == "HR" && !$data['region_id']) {
+            if (trim((string) $data['city']) == 'Rijeka') {
+                $regionCode = "HR-08";
+            }
+        }
+
+        if ($data['country_id'] == "CH" && !$data['region_id']) {
+            if (trim((string) $data['city']) == 'Geneva') {
+                $regionCode = "GE";
+            }
+        }
+
+        if ($data['country_id'] == "AT" && !$data['region_id']) {
+            $regions = [
+                'Wien'             => 'WI',
+                'Niederösterreich' => 'NO',
+                'Oberösterreich'   => 'OO',
+                'Salzburg'         => 'SB',
+                'Kärnten'          => 'KN',
+                'Steiermark'       => 'ST',
+                'Tirol'            => "TI",
+                'Burgenland'       => "BL",
+                'Vorarlberg'       => "VB"
+            ];
+
+            if (isset($regions[trim((string) $data['region'])])) {
+                $regionCode = $regions[trim((string) $data['region'])];
+            }
+
+            if (trim((string) $data['city']) == 'Pfarrkirchen') {
+                $regionCode = "OO";
+            }
+        }
+
+        if ($regionCode) {
+            $regionModel = $this->regionFactory->create()
+                                ->loadByCode($regionCode, $data['country_id']);
+            if ($regionModel->getId()) {
+                $data["region_id"] = $regionModel->getId();
+                $data["region"]    = $regionModel->getData("name");
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Get Order Item
+     *
+     * @param Magento\Sales\Model\Order\ItemFactory $item
+     * @param int $storeId
+     * @return Magento\Sales\Model\Order\ItemFactory
+     */
+    public function getOrderItem($item, $storeId)
+    {
+        $orderItem = $this->orderItemFactory->create();
+        $sku       = $item["sku"];
+        $productId = $this->productFactory->create()
+            ->setStoreId($storeId)
+            ->getIdBySku($sku);
+        if ($productId) {
+            $orderItem->setData("product_id", $productId);
+        } else {
+            $this->log("WARN: sku " . $sku . " not found");
+        }
+        $orderItem->setData("product_type", "simple");
+        $orderItem->setData("store_id", $storeId);
+        $orderItem->setData("is_virtual", 0);
+        $orderItem->setData("base_weee_tax_applied_amount", 0);
+        $orderItem->setData("base_weee_tax_applied_row_amnt", 0);
+        $orderItem->setData("base_weee_tax_applied_row_amount", 0);
+        $orderItem->setData("weee_tax_applied_amount", 0);
+        $orderItem->setData("weee_tax_applied_row_amount", 0);
+        $orderItem->setData("weee_tax_applied", 0);
+        $orderItem->setData("weee_tax_disposition", 0);
+        $orderItem->setData("weee_tax_row_disposition", 0);
+        $orderItem->setData("base_weee_tax_disposition", 0);
+        $orderItem->setData("base_weee_tax_row_disposition", 0);
+
+        $orderItem->setData("site_order_item_id", $item["id"]);
+
+        $itemPrice    = (float) $item["price"];
+        $rowTax       = (float) $item["tax_amount"];
+        $itemTax      = $rowTax / (int) $item["qty"];
+        $itemPrice    = (float) $item["price"] - $itemTax;
+        $priceInclTax = (float) $item["price"];
+
+        $rowTotal        = $itemPrice * (int) $item["qty"];
+        $rowTotalInclTax = $priceInclTax * (int) $item["qty"];
+
+        $orderItem->setData("tax_amount", $rowTax);
+        $orderItem->setData("base_tax_amount", $rowTax);
+        $orderItem->setData('tax_percent', (float) $item["tax_percent"]);
+
+        $orderItem->setData("sku", $sku)
+            ->setData("name", $item["name"])
+            ->setData("weight", (float) $item["weight"])
+            ->setData("qty_ordered", (int) $item["qty"])
+            ->setData("price", $itemPrice)
+            ->setData("base_price", $itemPrice)
+            ->setData("price_incl_tax", $priceInclTax)
+            ->setData("base_price_incl_tax", $priceInclTax)
+            ->setData("original_price", $itemPrice)
+            ->setData("base_original_price", $itemPrice)
+            ->setData("row_total", $rowTotal)
+            ->setData("base_row_total", $rowTotal)
+            ->setData("row_total_incl_tax", $rowTotalInclTax)
+            ->setData("base_row_total_incl_tax", $rowTotalInclTax);
+
+        return $orderItem;
+    }
+
+    /**
+     * Update Order Item
+     *
+     * @param Magento\Sales\Model\Order\ItemFactory $mageOrderItem
+     * @param Magento\Sales\Model\Order\ItemFactory $orderItem
+     * @return Magento\Sales\Model\Order\ItemFactory
+     */
+    public function updateOrderItemCalculation($mageOrderItem, $orderItem)
+    {
+        $mageOrderItem->setData("product_type", "simple");
+        $mageOrderItem->setData("store_id", $orderItem->getData("store_id"));
+        $mageOrderItem->setData("is_virtual", 0);
+        $mageOrderItem->setData("base_weee_tax_applied_amount", 0);
+        $mageOrderItem->setData("base_weee_tax_applied_row_amnt", 0);
+        $mageOrderItem->setData("base_weee_tax_applied_row_amount", 0);
+        $mageOrderItem->setData("weee_tax_applied_amount", 0);
+        $mageOrderItem->setData("weee_tax_applied_row_amount", 0);
+        $mageOrderItem->setData("weee_tax_applied", 0);
+        $mageOrderItem->setData("weee_tax_disposition", 0);
+        $mageOrderItem->setData("weee_tax_row_disposition", 0);
+        $mageOrderItem->setData("base_weee_tax_disposition", 0);
+        $mageOrderItem->setData("base_weee_tax_row_disposition", 0);
+
+        $mageOrderItem->setData("site_order_item_id", $orderItem->getData("site_order_item_id"));
+
+        $mageOrderItem->setData("tax_amount", $orderItem->getData("tax_amount"));
+        $mageOrderItem->setData("base_tax_amount", $orderItem->getData("base_tax_amount"));
+        $mageOrderItem->setData('tax_percent', $orderItem->getData('tax_percent'));
+
+        $mageOrderItem->setData("sku", $orderItem->getData("sku"))
+            ->setData("name", $orderItem->getData("name"))
+            ->setData("weight", $orderItem->getData("weight"))
+            ->setData("qty_ordered", $orderItem->getData("qty_ordered"))
+            ->setData("price", $orderItem->getData("price"))
+            ->setData("base_price", $orderItem->getData("base_price"))
+            ->setData("price_incl_tax", $orderItem->getData("price_incl_tax"))
+            ->setData("base_price_incl_tax", $orderItem->getData("base_price_incl_tax"))
+            ->setData("original_price", $orderItem->getData("original_price"))
+            ->setData("base_original_price", $orderItem->getData("base_original_price"))
+            ->setData("row_total", $orderItem->getData("row_total"))
+            ->setData("base_row_total", $orderItem->getData("base_row_total"))
+            ->setData("row_total_incl_tax", $orderItem->getData("row_total_incl_tax"))
+            ->setData("base_row_total_incl_tax", $orderItem->getData("base_row_total_incl_tax"));
+
+        return $mageOrderItem;
+    }
+
+    /**
+     * Check if sku is existing
+     *
+     * @param array $ioOrderItems
+     * @param int $storeId
+     * @return int
+     */
+    public function isSkuInOrderMissing($ioOrderItems, $storeId)
+    {
+        foreach ($ioOrderItems as $orderItem) {
+            $sku     = $orderItem["sku"];
+            $product = $this->skuHelper->loadBySku($sku, $storeId);
+            if (!$product) {
+                $this->log("WARN: sku " . $sku . " not found");
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Get Payment Info
+     *
+     * @param array $paymentInfo
+     * @return Magento\Sales\Model\Order\Payment
+     */
+    public function getPaymentInfo($paymentInfo)
+    {
+        $magePaymentMethods   = $this->getMagentoPaymentMethods();
+        $defaultPaymentMethod = key($magePaymentMethods);
+        $ioPaymentMethod      = $paymentInfo["payment_method"];
+        if (!$ioPaymentMethod || !isset($magePaymentMethods[$ioPaymentMethod])) {
+            $ioPaymentMethod  = $defaultPaymentMethod;
+        }
+
+        $orderPayment = $this->paymentFactory->create();
+        $orderPayment->setData("method", $ioPaymentMethod)
+            ->setData("cc_last4", $paymentInfo["cc_last4"]);
+
+        return $orderPayment;
+    }
+
+    /**
+     * Get Shipping Methods
+     *
+     * @return array
+     */
+    public function getMagentoShippingMethods()
+    {
+        $shipMethods    = [];
+        $activeCarriers = $this->shippingConfig->getActiveCarriers();
+        foreach ($activeCarriers as $carrierCode => $carrierModel) {
+            $carrierTitle = $this->scopeConfig->getValue('carriers/' . $carrierCode . '/title');
+            if ($carrierMethods = $carrierModel->getAllowedMethods()) {
+                foreach ($carrierMethods as $methodCode => $methodLabel) {
+                    if (is_array($methodLabel)) {
+                        foreach ($methodLabel as $methodLabelKey => $methodLabelValue) {
+                            $shipMethods[$methodLabelKey] = $methodLabelValue;
+                        }
+                    } else {
+                        $shipMethod = $carrierCode . "_" . $methodCode;
+                        $shipMethodTitle = $carrierTitle . " - " . $methodLabel;
+                        $shipMethods[$shipMethod] = $shipMethodTitle;
+                    }
+                }
+            }
+        }
+
+        return $shipMethods;
+    }
+
+    /**
+     * Get Magento Shipping Methods
+     *
+     * @return array
+     */
+    public function getAllMagentoShippingMethods()
+    {
+        $shipMethods    = [];
+        $activeCarriers = $this->shippingConfig->getAllCarriers();
+        foreach ($activeCarriers as $carrierCode => $carrierModel) {
+            $carrierTitle = $this->scopeConfig->getValue('carriers/' . $carrierCode . '/title');
+            if ($carrierMethods = $carrierModel->getAllowedMethods()) {
+                foreach ($carrierMethods as $methodCode => $methodLabel) {
+                    if (is_array($methodLabel)) {
+                        foreach ($methodLabel as $methodLabelKey => $methodLabelValue) {
+                            $shipMethods[$methodLabelKey] = $methodLabelValue;
+                        }
+                    } else {
+                        $shipMethod = $carrierCode . "_" . $methodCode;
+                        $shipMethodTitle = $carrierTitle . " - " . $methodLabel;
+                        $shipMethods[$shipMethod] = $shipMethodTitle;
+                    }
+                }
+            }
+        }
+
+        return $shipMethods;
+    }
+
+    /**
+     * Get Magento Payment Methods
+     *
+     * @return array
+     */
+    public function getMagentoPaymentMethods()
+    {
+        $paymentMethods = [];
+        $activePayments = $this->paymentConfig->getActiveMethods();
+        foreach ($activePayments as $paymentCode => $paymentModel) {
+            $paymentTitle = $this->scopeConfig->getValue('payment/' . $paymentCode . '/title');
+            if (!$paymentTitle) {
+                continue;
+            }
+            $paymentMethods[$paymentCode] = $paymentTitle;
+        }
+
+        return $paymentMethods;
+    }
+
+    /**
+     * Create Invoice
+     *
+     * @param Magento\Sales\Model\OrderFactory $order
+     * @return void
+     */
+    public function createInvoice($order)
+    {
+        if ($order->canInvoice()) {
+            try {
+                $invoice = $this->invoiceManagementInterface->prepareInvoice($order);
+                $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
+                $invoice->register();
+
+                $transactionSave = $this->transaction
+                                        ->addObject($invoice)
+                                        ->addObject($invoice->getOrder());
+                $transactionSave->save();
+                $order->setData("base_total_invoiced", $order->getData("base_grand_total"));
+                $order->setData("total_invoiced", $order->getData("grand_total"));
+
+                $order->setData("total_paid", $order->getData("grand_total"));
+                $order->setData("base_total_paid", $order->getData("grand_total"));
+                $order->save();
+                $payment = $order->getPayment();
+                if ($payment->getId()) {
+                    $payment->setData("base_amount_paid", $order->getData("grand_total"));
+                    $payment->setData("amount_paid", $order->getData("grand_total"));
+                    $payment->save();
+                }
+                $invoice->setData("base_grand_total", $order->getData("base_grand_total"));
+                $invoice->setData("grand_total", $order->getData("grand_total"));
+
+                $invoice->setData("discount_amount", $order->getData("discount_amount"));
+                $invoice->setData("base_discount_amount", $order->getData("base_discount_amount"));
+                $invoice->save();
+            } catch (\Exception $e) {
+                $errorMes = "Error while create invoice " . $e->getMessage();
+                throw new \Magento\Framework\Webapi\Exception(__($errorMes), 0, 400);
+            }
+        } else {
+            $message = 'Can not create Invoice for Order <'. $order->getIncrementId() . '>';
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log($message);
+        }
+    }
+
+    /**
+     * Create Shipment
+     *
+     * @param Magento\Sales\Model\OrderFactory $order
+     * @param array $ioOrderInfo
+     * @param array $shipmentInfo
+     * @return void
+     */
+    public function createShipment($order, $ioOrderInfo, $shipmentInfo)
+    {
+        if ($order->hasShipments()) {
+            $message = "Skip order <" . $order->getIncrementId() . "> for already has shipment";
+            $this->results["response"]["data"]["success"][] = $message;
+            $this->log($message);
+            return null;
+        }
+
+        if ($ioOrderInfo["shipping_status"] != "shipped") {
+            $message = "Order <" . $order->getIncrementId() . "> is not shipped on IO";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log($message);
+            return null;
+        }
+
+        // create shipment
+        foreach ($shipmentInfo as $_shipmentInfo) {
+            try {
+                // shipping date
+                if (!$_shipmentInfo["shipping_date"]) {
+                    continue;
+                }
+                // item info
+                if (!isset($_shipmentInfo["item_info"]) || !count($_shipmentInfo["item_info"]) ||
+                    !isset($_shipmentInfo["item_info"][0])) {
+                    continue;
+                }
+                $hasItem = false;
+                foreach ($_shipmentInfo["item_info"] as $itemInfo) {
+                    if (!$itemInfo["sku"] || !$itemInfo["qty"]) {
+                        continue;
+                    }
+                    $hasItem = true;
+                }
+                if (!$hasItem) {
+                    continue;
+                }
+                // track info
+                if (!isset($_shipmentInfo["track_info"]) || !count($_shipmentInfo["track_info"]) ||
+                    !isset($_shipmentInfo["track_info"][0])) {
+                    continue;
+                }
+                $trackInfo = $_shipmentInfo["track_info"][0];
+                if (!$trackInfo["carrier_code"] || !$trackInfo["title"]) {
+                    continue;
+                }
+                if (!isset($trackInfo["track_number"])) {
+                    $trackingNumber = "N/A";
+                } else {
+                    $trackingNumber = $trackInfo["track_number"];
+                    if (!$trackingNumber) {
+                        $trackingNumber = "N/A";
+                    }
+                }
+
+                $carrierCode  = $trackInfo["carrier_code"];
+                $className    = $trackInfo["title"];
+                $shippingDate = $_shipmentInfo["shipping_date"];
+
+                $trackingDetail = [
+                    "carrier_code" => $carrierCode,
+                    "title" => $className,
+                    "number" => $trackingNumber,
+                    "created_at" => $shippingDate
+                ];
+
+                $convertOrder = $this->convertOrder;
+                $shipment     = $convertOrder->toShipment($order);
+                $shipment->setCreatedAt($shippingDate);
+
+                foreach ($order->getAllItems() as $orderItem) {
+                    if (!$orderItem->getQtyToShip() || $orderItem->getIsVirtual()) {
+                        continue;
+                    }
+                    foreach ($_shipmentInfo["item_info"] as $itemInfo) {
+                        if ($itemInfo["sku"] == $orderItem->getSku()) {
+                            $qtyShipped   = (int) $itemInfo["qty"];
+                            $shipmentItem = $convertOrder->itemToShipmentItem($orderItem)->setQty($qtyShipped);
+                            $shipment->addItem($shipmentItem);
+                        }
+                    }
+                }
+
+                $track = $this->shipmentTrackFactory->create()->addData($trackingDetail);
+                $shipment->addTrack($track);
+                $shipment->register();
+                $shipment->getOrder()->setIsInProcess(true);
+                $shipment->save();
+                $shipment->getOrder()->save();
+                $message = "Shipment '" . $shipment->getIncrementId() . "' imported for order <" .
+                    $order->getIncrementId() . ">";
+                $this->results["response"]["data"]["success"][] = $message;
+                $this->log($message);
+            } catch (\Exception $e) {
+                throw new \Magento\Framework\Webapi\Exception(__("create shipment " . $e->getMessage()), 0, 400);
+            }
+        }
+    }
+
+    /**
+     * Create Credit Memo
+     *
+     * @param int $orderIncrementID
+     * @param array $refundInfo
+     * @return false|void
+     */
+    public function createCreditMemo($orderIncrementID, $refundInfo)
+    {
+        $orderObject = $this->orderFactory->create()->loadByIncrementId($orderIncrementID);
+        if ($orderObject && !$orderObject->hasInvoices()) {
+            $orderObject->setData("status", "closed");
+            $orderObject->setData("state", "closed");
+            $orderObject->save();
+            $message = "Order <" . $orderIncrementID . "> set closed status success";
+            $this->results["response"]["data"]["success"][] = $message;
+            $this->log($message);
+            return false;
+        }
+        if ($orderObject && !$orderObject->hasCreditmemos()) {
+            $shippingRefundedTotal    = 0;
+            $shippingTaxRefundedTotal = 0;
+            $taxRefundedTotal         = 0;
+            $subtotalRefundedTotal    = 0;
+            $totalRefundedTotal       = 0;
+            foreach ($refundInfo as $_refundInfo) {
+                // item info
+                if (!isset($_refundInfo["item_info"]) || !count($_refundInfo["item_info"]) ||
+                    !isset($_refundInfo["item_info"][0])) {
+                    continue;
+                }
+                $hasItem = false;
+                foreach ($_refundInfo["item_info"] as $itemInfo) {
+                    if (!$itemInfo["sku"] || !$itemInfo["qty"]) {
+                        continue;
+                    }
+                    $hasItem = true;
+                }
+                if (!$hasItem) {
+                    continue;
+                }
+                $infoItems = [];
+                foreach ($_refundInfo["item_info"] as $itemInfo) {
+                    $sku       = $itemInfo["sku"];
+                    $qtyRefund = (int) $itemInfo["qty"];
+                    foreach ($orderObject->getAllItems() as $orderItem) {
+                        if ($orderItem->getSku() == $sku) {
+                            $infoItems[$orderItem->getId()] = $qtyRefund;
+                        }
+                    }
+                }
+                if (!count($infoItems)) {
+                    $message = "WARN create credit memo for order <" .
+                        $orderObject->getIncrementId() . "> items ordered do not match";
+                    $this->results["response"]["data"]["error"][] = $message;
+                    $this->log($message);
+                    return null;
+                }
+                $creditMemoData = [
+                    'qtys' => $infoItems
+                ];
+                try {
+                    $creditMemo = $this->creditMemoFactory->createByOrder($orderObject, $creditMemoData);
+                    $creditMemo->save();
+                    $shippingRefundedTotal    += (float) $creditMemo->getData("base_shipping_amount");
+                    $shippingTaxRefundedTotal += (float) $creditMemo->getData("shipping_tax_amount");
+                    $taxRefundedTotal         += (float) $creditMemo->getData("tax_amount");
+                    $subtotalRefundedTotal    += (float) $creditMemo->getData("subtotal");
+                    $totalRefundedTotal       += (float) $creditMemo->getData("base_grand_total");
+
+                    $message = "Credit Memo '" . $creditMemo->getIncrementId() .
+                        "' imported for order <" . $orderIncrementID . ">";
+                    $this->results["response"]["data"]["success"][] = $message;
+                    $this->log($message);
+                } catch (\Exception $e) {
+                    $message = "ERROR create credit memo " . $e->getMessage();
+                    $this->results["response"]["data"]["error"][] = $message;
+                    $this->log($message);
+                    throw new \Magento\Framework\Webapi\Exception(__($message), 0, 400);
+                }
+            }
+            // reset order after save credit memo
+            $orderObject->setData("shipping_refunded", $shippingRefundedTotal);
+            $orderObject->setData("base_shipping_refunded", $shippingRefundedTotal);
+            $orderObject->setData("shipping_tax_refunded", $shippingTaxRefundedTotal);
+            $orderObject->setData("tax_refunded", $taxRefundedTotal);
+            $orderObject->setData("base_tax_refunded", $taxRefundedTotal);
+            $orderObject->setData("subtotal_refunded", $subtotalRefundedTotal);
+            $orderObject->setData("base_subtotal_refunded", $subtotalRefundedTotal);
+            $orderObject->setData("total_refunded", $totalRefundedTotal);
+            $orderObject->setData("base_total_refunded", $totalRefundedTotal);
+            $orderObject->save();
+        } else {
+            $message = "Skip order <" . $orderObject->getIncrementId() . "> has been refunded";
+            $this->results["response"]["data"]["success"][] = $message;
+            $this->log($message);
+        }
+    }
+
+    /**
+     * Clean response messages
+     *
+     * @return void
+     */
+    public function cleanResponseMessages()
+    {
+        if (count($this->results["response"])) {
+            foreach ($this->results["response"] as $key => $value) {
+                if (isset($value["success"]) && !count($value["success"])) {
+                    unset($this->results["response"][$key]["success"]);
+                }
+                if (isset($value["error"]) && !count($value["error"])) {
+                    unset($this->results["response"][$key]["error"]);
+                }
+                if (isset($this->results["response"][$key]) &&
+                    !count($this->results["response"][$key])) {
+                    unset($this->results["response"][$key]);
+                }
+                if (isset($this->results["response"][$key]["success"]) &&
+                    count($this->results["response"][$key]["success"])) {
+                    $successData = array_unique($this->results["response"][$key]["success"]);
+                    $this->results["response"][$key]["success"] = $successData;
+                }
+                if (isset($this->results["response"][$key]["error"]) &&
+                    count($this->results["response"][$key]["error"])) {
+                    $errorData = array_unique($this->results["response"][$key]["error"]);
+                    $this->results["response"][$key]["error"] = $errorData;
+                }
+            }
+        }
+    }
+
+    /**
+     * Log message
+     *
+     * @param string $message
+     * @return void
+     */
+    public function log($message)
+    {
+        $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);
+        $logger = new \Zend_Log();
+        $logger->addWriter($writer);
+        $logger->info($message);
+    }
+}

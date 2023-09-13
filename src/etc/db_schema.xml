@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * WISEROBOT INDUSTRIES SDN. BHD. **NOTICE OF LICENSE**
+ * This source file is subject to the EULA that is bundled with this package in the file LICENSE.pdf
+ * It is also available through the world-wide-web at this URL: http://wiserobot.com/mage_extension_license.pdf
+ * =================================================================
+ * This package is designed for all versions of Magento
+ * =================================================================
+ * Copyright (c) 2019 WISEROBOT INDUSTRIES SDN. BHD. (http://www.wiserobot.com)
+ * License http://wiserobot.com/mage_extension_license.pdf
+ */
+-->
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+    <table name="wr_io_product_image" resource="default" engine="innodb" comment="WiseRobot Io Product Image Table">
+        <column xsi:type="int" padding="11" name="id" unsigned="true" nullable="false" identity="true" comment="ID"/>
+        <column xsi:type="varchar" name="sku" nullable="false" length="255" comment="SKU"/>
+        <column xsi:type="int" padding="4" name="store_id" unsigned="false" nullable="false" identity="false" default="0" comment="Store ID"/>
+        <column xsi:type="varchar" name="image" nullable="true" length="255" default="NULL" comment="Image"/>
+        <column xsi:type="varchar" name="image_placement" nullable="false" length="255" default="NULL" comment="Image Placement"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="id"/>
+        </constraint>
+    </table>
+    <table name="wr_io_order" resource="default" engine="innodb" comment="WiseRobot Io Order Table">
+        <column xsi:type="int" padding="11" name="id" unsigned="true" nullable="false" identity="true" comment="ID"/>
+        <column xsi:type="varchar" name="order_increment_id" nullable="false" length="50" comment="Order Increment ID"/>
+        <column xsi:type="varchar" name="io_order_id" nullable="false" length="255" comment="IO Order ID"/>
+        <column xsi:type="varchar" name="marketplace" nullable="true" length="255" default="NULL" comment="Marketplace"/>
+        <column xsi:type="varchar" name="transaction_id" nullable="true" length="255" default="NULL" comment="Transaction ID"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="WR_IO_ORDER_ORDER_INCREMENT_ID_INDEX">
+            <column name="order_increment_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="WR_IO_ORDER_IO_ORDER_ID_INDEX">
+            <column name="io_order_id"/>
+        </constraint>
+    </table>
+    <table name="sales_order" resource="sales" comment="Sales Flat Order">
+        <column xsi:type="varchar" name="io_order_id" nullable="true" comment="Io Site Order ID"/>
+        <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io ChannelAdvisor Order ID"/>
+        <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io Buyer User ID"/>
+        <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Marketplace Source"/>
+    </table>
+    <table name="sales_order_grid" resource="sales" engine="innodb" comment="Sales Flat Order Grid">
+        <column xsi:type="varchar" name="io_order_id" nullable="true" comment="Io Site Order ID"/>
+        <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io ChannelAdvisor Order ID"/>
+        <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io Buyer User ID"/>
+        <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Marketplace Source"/>
+    </table>
+    <table name="sales_order_item" resource="sales" engine="innodb" comment="Sales Flat Order Item">
+        <column xsi:type="varchar" name="site_order_item_id" nullable="true" comment="Io Site Order Item ID"/>
+    </table>
+</schema>
