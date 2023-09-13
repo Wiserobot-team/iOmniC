@@ -1,6 +1,6 @@
 {
   "name": "wiserobot/module-io",
-  "description": "Wiserobot Io",
+  "description": "WiseRobot Io",
   "require": {
     "php": "~7.0.13||~7.1.0||~7.2.0||~7.3.0||~7.4.0||~8.0.0||~8.1.0||~8.2.0",
     "magento/framework": "^102.0||^103.0"
@@ -15,7 +15,7 @@
     "map": [
       [
         "*",
-        "Wiserobot/Io"
+        "WiseRobot/Io"
       ]
     ]
   },
@@ -24,7 +24,7 @@
       "src/registration.php"
     ],
     "psr-4": {
-      "Wiserobot\\Io\\": "src/"
+      "WiseRobot\\Io\\": "src/"
     }
   }
 }
