@@ -11,6 +11,8 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Api;
 
 interface OrderIoInterface
@@ -25,9 +27,9 @@ interface OrderIoInterface
      * @return array
      */
     public function getList(
-        $store,
-        $filter = "",
-        $page = 1,
-        $limit = 50
-    );
+        int $store,
+        string $filter = "",
+        int $page = 1,
+        int $limit = 50
+    ): array;
 }

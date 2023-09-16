@@ -11,6 +11,8 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Model;
 
 use Magento\Catalog\Model\ProductFactory;
@@ -23,13 +25,14 @@ use Magento\Catalog\Model\CategoryFactory;
 use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as ConfigurableProduct;
 use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
 use Magento\Eav\Api\AttributeRepositoryInterface;
+use Magento\Framework\Webapi\Exception as WebapiException;
 
 class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 {
     /**
      * @var array
      */
-    public $results = [];
+    public array $results = [];
     /**
      * @var ProductFactory
      */
@@ -84,26 +87,26 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param AttributeRepositoryInterface $attributeRepositoryInterface
      */
     public function __construct(
-        ProductFactory                      $productFactory,
-        ProductCollectionFactory            $productCollectionFactory,
-        StoreManagerInterface               $storeManager,
-        TimezoneInterface                   $timezoneInterface,
-        ClassModelFactory                   $classModelFactory,
-        EntityAttributeSetFactory           $entityAttributeSetFactory,
-        CategoryFactory                     $categoryFactory,
-        ConfigurableProduct                 $configurableProduct,
-        GroupedProduct                      $groupedProduct,
-        AttributeRepositoryInterface        $attributeRepositoryInterface
+        ProductFactory $productFactory,
+        ProductCollectionFactory $productCollectionFactory,
+        StoreManagerInterface $storeManager,
+        TimezoneInterface $timezoneInterface,
+        ClassModelFactory $classModelFactory,
+        EntityAttributeSetFactory $entityAttributeSetFactory,
+        CategoryFactory $categoryFactory,
+        ConfigurableProduct $configurableProduct,
+        GroupedProduct $groupedProduct,
+        AttributeRepositoryInterface $attributeRepositoryInterface
     ) {
-        $this->productFactory               = $productFactory;
-        $this->productCollectionFactory     = $productCollectionFactory;
-        $this->storeManager                 = $storeManager;
-        $this->timezoneInterface            = $timezoneInterface;
-        $this->classModelFactory            = $classModelFactory;
-        $this->entityAttributeSetFactory    = $entityAttributeSetFactory;
-        $this->categoryFactory              = $categoryFactory;
-        $this->configurableProduct          = $configurableProduct;
-        $this->groupedProduct               = $groupedProduct;
+        $this->productFactory = $productFactory;
+        $this->productCollectionFactory = $productCollectionFactory;
+        $this->storeManager = $storeManager;
+        $this->timezoneInterface = $timezoneInterface;
+        $this->classModelFactory = $classModelFactory;
+        $this->entityAttributeSetFactory = $entityAttributeSetFactory;
+        $this->categoryFactory = $categoryFactory;
+        $this->configurableProduct = $configurableProduct;
+        $this->groupedProduct = $groupedProduct;
         $this->attributeRepositoryInterface = $attributeRepositoryInterface;
     }
 
@@ -131,18 +134,18 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     public $customAttributes = [
         "category_name" => "Category Name",
         "category_tree" => "Category Tree",
-        "category_ids"  => "Category Ids"
+        "category_ids" => "Category Ids"
     ];
 
     /**
      * @var string[]
      */
     public $floatAttributes = [
-        "price"         => "Price",
+        "price" => "Price",
         "special_price" => "Special Price",
-        "tier_price"    => "Tier Price",
-        "cost"          => "Cost",
-        "weight"        => "Weight"
+        "tier_price" => "Tier Price",
+        "cost" => "Cost",
+        "weight" => "Weight"
     ];
 
     /**
@@ -173,15 +176,20 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Populate Products by filter params
      *
-     * @param string $store
+     * @param int $store
      * @param string $select
      * @param string $filter
      * @param int $page
      * @param int $limit
-     * @return array|null
+     * @return array
      */
-    public function getList($store, $select = "*", $filter = "", $page = 1, $limit = 50)
-    {
+    public function getList(
+        int $store,
+        string $select = "*",
+        string $filter = "",
+        int $page = 1,
+        int $limit = 50
+    ): array {
         // create product collection
         $productCollection = $this->productCollectionFactory->create();
 
@@ -191,21 +199,21 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         if (!$store) {
             $message = "Field: 'store' is a required field";
             $this->results["error"] = $message;
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results);
         }
         try {
             $storeInfo = $this->storeManager->getStore($store);
         } catch (\Exception $e) {
             $message = "Requested 'store' " . $store . " doesn't exist";
             $this->results["error"] = $message;
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results);
         }
         $productCollection->addStoreFilter($store);
 
         // selecting
-        $selectAll   = false;
+        $selectAll = false;
         $selectAttrs = [];
-        $select      = trim((string) $select);
+        $select = trim((string) $select);
         if (!$select || $select == "*") {
             $selectAll = true;
             $productCollection->addAttributeToSelect("*");
@@ -242,14 +250,14 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 if (!$condition[0] || !$condition[1]) {
                     continue;
                 }
-                $attrCode  = $condition[0];
+                $attrCode = $condition[0];
                 $attrValue = $condition[1];
                 try {
                     $this->attributeRepositoryInterface->get('catalog_product', $attrCode);
                 } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
                     $message = "Field: 'filter' - attribute '" . $attrCode . "' doesn't exist";
                     $this->results["error"] = $message;
-                    throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results);
+                    throw new WebapiException(__($errorMess), 0, 400, $this->results);
                 }
 
                 if ($operator == "in") {
@@ -258,7 +266,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 
                 $productCollection->addFieldToFilter(
                     $attrCode,
-                    [$operator => [$attrValue]]
+                    [
+                        $operator => [$attrValue]
+                    ]
                 );
             }
         }
@@ -277,63 +287,63 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         if ($limit > 50) {
             $limit = 50; // maximum page size
         }
+
+        $result = [];
         $totalPages = ceil($total / $limit);
         if ($page > $totalPages) {
-            return null;
+            return $result;
         }
 
         $productCollection->setPageSize($limit);
         $productCollection->setCurPage($page);
-
-        $result = [];
         if ($productCollection->getSize()) {
             foreach ($productCollection as $product) {
                 $sku = $product->getData("sku");
                 if (!$sku) {
                     continue;
                 }
-                $productId  = $product->getData("entity_id");
-                $price      = $this->getAttrValue($product, 'price', $store);
-                $qty        = $product->getData("qty");
+                $productId = (int) $product->getData("entity_id");
+                $price = $this->getAttrValue($product, 'price', $store);
+                $qty = $product->getData("qty");
                 $minCartQty = $product->getData("min_sale_qty");
 
                 // default product data
-                $productData                             = [];
-                $attrInfo                                = 'attribute_info';
-                $productData['store_id']                 = $storeInfo->getId();
-                $productData['store']                    = $storeInfo->getName();
-                $productData[$attrInfo]                  = [];
-                $productData[$attrInfo]['id']            = $productId;
-                $productData[$attrInfo]['sku']           = $sku;
-                $productData[$attrInfo]['name']          = $product->getData("name");
+                $productData = [];
+                $attrInfo = 'attribute_info';
+                $productData['store_id'] = (int) $storeInfo->getId();
+                $productData['store'] = $storeInfo->getName();
+                $productData[$attrInfo] = [];
+                $productData[$attrInfo]['id'] = $productId;
+                $productData[$attrInfo]['sku'] = $sku;
+                $productData[$attrInfo]['name'] = $product->getData("name");
                 $productData[$attrInfo]['attribute_set'] = $this->getAttrValue($product, 'attribute_set_id', $store);
-                $productData[$attrInfo]['visibility']    = $this->getAttrValue($product, 'visibility', $store);
-                $productData[$attrInfo]['tax_class']     = $this->getAttrValue($product, 'tax_class_id', $store);
-                $productData[$attrInfo]['type_id']       = $product->getData("type_id");
-                $productData[$attrInfo]['created_at']    = $product->getData("created_at");
-                $productData[$attrInfo]['updated_at']    = $product->getData("updated_at");
-                $productData[$attrInfo]['status']        = $this->getAttrValue($product, 'status', $store);
-                $productData[$attrInfo]['price']         = ($price) ? floatval($price) : $price;
+                $productData[$attrInfo]['visibility'] = $this->getAttrValue($product, 'visibility', $store);
+                $productData[$attrInfo]['tax_class'] = $this->getAttrValue($product, 'tax_class_id', $store);
+                $productData[$attrInfo]['type_id'] = $product->getData("type_id");
+                $productData[$attrInfo]['created_at'] = $product->getData("created_at");
+                $productData[$attrInfo]['updated_at'] = $product->getData("updated_at");
+                $productData[$attrInfo]['status'] = $this->getAttrValue($product, 'status', $store);
+                $productData[$attrInfo]['price'] = ($price) ? floatval($price) : $price;
 
                 // image attributes
                 if ($selectAll || in_array("image_attributes", $selectAttrs)) {
-                    $productData[$attrInfo]['base_image']            = $this->getAttrImg($product, 'image');
-                    $productData[$attrInfo]['base_image_label']      = $this->getAttrImg($product, 'image_label');
-                    $productData[$attrInfo]['small_image']           = $this->getAttrImg($product, 'small_image');
-                    $productData[$attrInfo]['small_image_label']     = $this->getAttrImg($product, 'small_image_label');
-                    $productData[$attrInfo]['thumbnail_image']       = $this->getAttrImg($product, 'thumbnail');
-                    $productData[$attrInfo]['thumbnail_image_label'] = $this->getAttrImg($product, 'thumbnail_label');
-                    $productData[$attrInfo]['swatch_image']          = $this->getAttrImg($product, 'swatch_image');
-                    $productData[$attrInfo]['swatch_image_label']    = '';
+                    $productData[$attrInfo]['base_image'] = $this->getImgAttr($product, 'image');
+                    $productData[$attrInfo]['base_image_label'] = $this->getImgAttr($product, 'image_label');
+                    $productData[$attrInfo]['small_image'] = $this->getImgAttr($product, 'small_image');
+                    $productData[$attrInfo]['small_image_label'] = $this->getImgAttr($product, 'small_image_label');
+                    $productData[$attrInfo]['thumbnail_image'] = $this->getImgAttr($product, 'thumbnail');
+                    $productData[$attrInfo]['thumbnail_image_label'] = $this->getImgAttr($product, 'thumbnail_label');
+                    $productData[$attrInfo]['swatch_image'] = $this->getImgAttr($product, 'swatch_image');
+                    $productData[$attrInfo]['swatch_image_label'] = '';
 
-                    $additionalImage = $this->populateAdditionalImageInfo($productId, $storeInfo->getId());
-                    $productData[$attrInfo]['additional_images']       = $additionalImage['additional_images'];
+                    $additionalImage = $this->populateAdditionalImageInfo($productId, (int) $storeInfo->getId());
+                    $productData[$attrInfo]['additional_images'] = $additionalImage['additional_images'];
                     $productData[$attrInfo]['additional_image_labels'] = $additionalImage['additional_image_labels'];
                 }
 
                 // product categories
                 if ($selectAll || in_array("categories", $selectAttrs)) {
-                    $productData[$attrInfo]['categories'] = $this->getCategoryTreeCustom($product, $storeInfo);
+                    $productData[$attrInfo]['categories'] = $this->getCategoryTreeCustom($product, $store);
                 }
 
                 if ($selectAll) {
@@ -379,42 +389,42 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 
                 // populate productLinkInfo
                 $relatedProducts = $product->getRelatedProducts();
-                $relatedSkus     = [];
+                $relatedSkus = [];
                 $relatedPosition = [];
                 foreach ($relatedProducts as $relatedProduct) {
-                    $relatedSkus[]     = $relatedProduct->getSku();
+                    $relatedSkus[] = $relatedProduct->getSku();
                     $relatedPosition[] = $relatedProduct->getPosition();
                 }
 
                 $upSellProducts = $product->getUpSellProducts();
-                $upsellSkus     = [];
+                $upsellSkus = [];
                 $upsellPosition = [];
                 foreach ($upSellProducts as $upSellProduct) {
-                    $upsellSkus[]     = $upSellProduct->getSku();
+                    $upsellSkus[] = $upSellProduct->getSku();
                     $upsellPosition[] = $upSellProduct->getPosition();
                 }
 
                 $crossSellProducts = $product->getCrossSellProducts();
-                $crosssellSkus     = [];
+                $crosssellSkus = [];
                 $crosssellPosition = [];
                 foreach ($crossSellProducts as $crossSellProduct) {
-                    $crosssellSkus[]     = $crossSellProduct->getSku();
+                    $crosssellSkus[] = $crossSellProduct->getSku();
                     $crosssellPosition[] = $crossSellProduct->getPosition();
                 }
 
                 $productData['product_link_info'] = [
-                    "related_skus"       => implode(",", $relatedSkus),
-                    "related_position"   => implode(",", $relatedPosition),
-                    "upsell_skus"        => implode(",", $upsellSkus),
-                    "upsell_position"    => implode(",", $upsellPosition),
-                    "crosssell_skus"     => implode(",", $crosssellSkus),
+                    "related_skus" => implode(",", $relatedSkus),
+                    "related_position" => implode(",", $relatedPosition),
+                    "upsell_skus" => implode(",", $upsellSkus),
+                    "upsell_position" => implode(",", $upsellPosition),
+                    "crosssell_skus" => implode(",", $crosssellSkus),
                     "crosssell_position" => implode(",", $crosssellPosition)
                 ];
 
                 // populate stockInfo
                 $productData['stock_info'] = [
-                    "qty"          => ($qty) ? (int)$qty : $qty,
-                    "min_cart_qty" => ($minCartQty) ? (int)$minCartQty : $minCartQty
+                    "qty" => ($qty) ? (int) $qty : $qty,
+                    "min_cart_qty" => ($minCartQty) ? (int) $minCartQty : $minCartQty
                 ];
 
                 // populate imageInfo
@@ -422,7 +432,6 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 if (count($imageInfo)) {
                     $productData['image_info'] = $this->populateImageInfo($productId, $store);
                 }
-
                 $result[$sku] = $productData;
             }
             return $result;
@@ -437,7 +446,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param string $string
      * @return string|null
      */
-    public function processFilter($string)
+    public function processFilter(string $string): mixed
     {
         switch ($string) {
             case strpos((string) $string, " eq ") == true:
@@ -462,41 +471,44 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Populate Variation Information of Product
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param int $storeId
      * @return array
      */
-    public function populateVariationInfo($product, $storeId)
-    {
+    public function populateVariationInfo(
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): array {
         // default variationInfo
         $variationInfo = [];
         $variationInfo["is_in_relationship"] = false;
-        $variationInfo["is_parent"]          = false;
-        $variationInfo["parent_sku"]         = "";
-        $variationInfo["super_attribute"]    = "";
+        $variationInfo["is_parent"] = false;
+        $variationInfo["parent_sku"] = "";
+        $variationInfo["super_attribute"] = "";
 
         $hasParent = false;
         if ($product->getTypeId() == "configurable") {
             $superAttributes = $this->getRelationshipName($product);
-            $variationInfo["is_in_relationship"]  = true;
-            $variationInfo["is_parent"]           = true;
-            $variationInfo["parent_sku"]          = $product->getSku();
+            $variationInfo["is_in_relationship"] = true;
+            $variationInfo["is_parent"] = true;
+            $variationInfo["parent_sku"] = $product->getSku();
             if ($superAttributes) {
                 $variationInfo["super_attribute"] = $superAttributes;
             }
         } elseif ($product->getTypeId() == "simple" || $product->getTypeId() == "virtual") {
-            $parentIds = $this->configurableProduct->create()->getParentIdsByChild($product->getId());
+            $parentIds = $this->configurableProduct->create()
+                ->getParentIdsByChild($product->getId());
             if (count($parentIds)) {
-                $hasParent     = true;
-                $parentId      = $parentIds[0];
+                $hasParent = true;
+                $parentId = $parentIds[0];
                 $parentProduct = $this->productFactory->create()
                     ->setStoreId($storeId)
                     ->load($parentId);
             }
             if ($hasParent) {
                 $variationInfo["is_in_relationship"] = true;
-                $variationInfo["is_parent"]          = false;
-                $variationInfo["parent_sku"]         = $parentProduct->getSku();
+                $variationInfo["is_parent"] = false;
+                $variationInfo["parent_sku"] = $parentProduct->getSku();
             }
         }
 
@@ -516,23 +528,23 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Get Configurable Product Attributes
      *
-     * @param Magento\Catalog\Model\ProductFactory $parentConfigurableProduct
-     * @return string|null
+     * @param \Magento\Catalog\Model\Product $parentConfigurableProduct
+     * @return string|false
      */
-    public function getRelationshipName($parentConfigurableProduct)
-    {
+    public function getRelationshipName(
+        \Magento\Catalog\Model\Product $parentConfigurableProduct
+    ): mixed {
         if ($parentConfigurableProduct->getTypeId() != "configurable") {
-            return null;
+            return false;
         }
-
         $productConfigurableAttrs = [];
-        $productAttributeOptions  = $this->configurableProduct->create()
+        $productAttributeOptions = $this->configurableProduct->create()
             ->getConfigurableAttributesAsArray($parentConfigurableProduct);
         foreach ($productAttributeOptions as $supperAttrOption) {
             $productConfigurableAttrs[] = $supperAttrOption["attribute_code"];
         }
         if (!count($productConfigurableAttrs)) {
-            return null;
+            return false;
         }
         sort($productConfigurableAttrs);
 
@@ -542,25 +554,28 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Populate Grouped Product Information
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param int $storeId
      * @return array
      */
-    public function populateGroupedProductInfo($product, $storeId)
-    {
+    public function populateGroupedProductInfo(
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): array {
         // default groupedInfo
         $groupedInfo = [];
-        $groupedInfo["is_parent"]  = false;
+        $groupedInfo["is_parent"] = false;
         $groupedInfo["parent_sku"] = "";
-        $groupedInfo["child_sku"]  = "";
-
+        $groupedInfo["child_sku"] = "";
         if ($product->getTypeId() == "grouped") {
             $groupedInfo["is_parent"] = true;
-            $childrenProductSkus      = [];
-            $childrenProductIds       = $this->groupedProduct->create()->getChildrenIds($product->getId());
+            $childrenProductSkus = [];
+            $childrenProductIds = $this->groupedProduct->create()
+                ->getChildrenIds($product->getId());
             if (isset($childrenProductIds[3]) && count($childrenProductIds[3])) {
                 foreach ($childrenProductIds[3] as $childrenProductId) {
-                    $childProduct = $this->productFactory->create()->setStoreId($storeId)->load($childrenProductId);
+                    $childProduct = $this->productFactory->create()
+                        ->setStoreId($storeId)->load($childrenProductId);
                     if ($childProduct && $childProduct->getId()) {
                         $childrenProductSkus[] = $childProduct->getSku();
                     }
@@ -571,9 +586,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 $groupedInfo["child_sku"] = implode(",", $childrenProductSkus);
             }
         } elseif ($product->getTypeId() == "simple" || $product->getTypeId() == "virtual") {
-            $parentIds = $this->groupedProduct->create()->getParentIdsByChild($product->getId());
+            $parentIds = $this->groupedProduct->create()
+                ->getParentIdsByChild($product->getId());
             if (count($parentIds)) {
-                $parentId      = $parentIds[0];
+                $parentId = $parentIds[0];
                 $parentProduct = $this->productFactory->create()
                     ->setStoreId($storeId)
                     ->load($parentId);
@@ -591,16 +607,17 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param int $storeId
      * @return array
      */
-    public function populateImageInfo($productId, $storeId)
+    public function populateImageInfo(int $productId, int $storeId): array
     {
         $imageInfo = [];
-        $product   = $this->productFactory->create()->setStoreId($storeId)->load($productId);
-        $gallery   = $product->getMediaGalleryImages();
+        $product = $this->productFactory->create()
+            ->setStoreId($storeId)->load($productId);
+        $gallery = $product->getMediaGalleryImages();
         if ($gallery && is_object($gallery) && count($gallery)) {
             $imageData = [];
             foreach ($gallery as $image) {
                 $imageData['position'] = $image['position'];
-                $imageData['url']      = $image['url'];
+                $imageData['url'] = $image['url'];
                 $imageInfo[] = $imageData;
             }
         }
@@ -615,61 +632,40 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param int $storeId
      * @return array
      */
-    public function populateAdditionalImageInfo($productId, $storeId)
+    public function populateAdditionalImageInfo(int $productId, int $storeId): array
     {
-        $additionalImage       = [];
+        $additionalImage = [];
         $additionalImageLabels = [];
-        $product               = $this->productFactory->create()->setStoreId($storeId)->load($productId);
-        $gallery               = $product->getMediaGalleryImages();
+        $product = $this->productFactory->create()
+            ->setStoreId($storeId)->load($productId);
+        $gallery = $product->getMediaGalleryImages();
         if ($gallery && is_object($gallery) && count($gallery)) {
             foreach ($gallery as $image) {
-                $additionalImage[]       = $image['file'];
+                $additionalImage[] = $image['file'];
                 $additionalImageLabels[] = $image['label'];
             }
         }
 
         return [
-            'additional_images'       => implode(',', $additionalImage),
+            'additional_images' => implode(',', $additionalImage),
             'additional_image_labels' => implode(',', $additionalImageLabels)
         ];
     }
 
     /**
-     * Get Product Image Label
-     *
-     * @param int $productId
-     * @param int $storeId
-     * @param string $imageAttribute
-     * @return mixed|string
-     */
-    public function getImageLabel($productId, $storeId, $imageAttribute)
-    {
-        $imageLabel = '';
-        $product    = $this->productFactory->create()->setStoreId($storeId)->load($productId);
-        $gallery    = $product->getData('media_gallery');
-        $file       = $product->getData($imageAttribute);
-        if ($file && $gallery && array_key_exists('images', $gallery)) {
-            foreach ($gallery['images'] as $image) {
-                if ($image['file'] == $file) {
-                    $imageLabel = $image['label'];
-                }
-            }
-        }
-
-        return $imageLabel;
-    }
-
-    /**
      * Get Attribute Value
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param string $attrCode
      * @param int $storeId
-     * @return float|int|string|null
+     * @return mixed
      */
-    public function getAttrValue($product, $attrCode, $storeId)
-    {
-        $store    = $this->storeManager->getStore()->load($storeId);
+    public function getAttrValue(
+        \Magento\Catalog\Model\Product $product,
+        string $attrCode,
+        int $storeId
+    ): mixed {
+        $store = $this->storeManager->getStore()->load($storeId);
         $attrData = $product->getData($attrCode);
         if ($attrCode == "price") {
             return $product->getPrice();
@@ -677,7 +673,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 
         if ($attrCode == "special_price") {
             if ($product->getData("special_price")) {
-                $now     = strtotime((string) $this->timezoneInterface->date()->format('Y-m-d H:i:s'));
+                $now = strtotime((string) $this->timezoneInterface
+                    ->date()
+                    ->format('Y-m-d H:i:s'));
                 $timeMax = strtotime((string) $product->getData("special_to_date"));
                 if ($timeMax && $now > $timeMax) {
                     return $product->getPrice();
@@ -694,12 +692,14 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         }
 
         if ($attrCode == "tax_class_id") {
-            $taxClassModel = $this->classModelFactory->create()->load($attrData);
+            $taxClassModel = $this->classModelFactory->create()
+                ->load($attrData);
             return $taxClassModel->getClassName();
         }
 
         if ($attrCode == "attribute_set_id") {
-            $attributeSets = $this->entityAttributeSetFactory->create()->load($product->getAttributeSetId());
+            $attributeSets = $this->entityAttributeSetFactory->create()
+                ->load($product->getAttributeSetId());
             return $attributeSets->getAttributeSetName();
         }
 
@@ -727,7 +727,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 
         if (isset($this->customAttributes[$attrCode])) {
             if ($attrCode == "category_name") {
-                $attrData = $this->getCategoryName($product, $store);
+                $attrData = $this->getCategoryName($product, $storeId);
             }
 
             if ($attrCode == "category_tree") {
@@ -743,7 +743,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             if (!$product->getResource()->getAttribute($attrCode)) {
                 return null;
             }
-            $attrFrontendInput = $product->getResource()->getAttribute($attrCode)->getData("frontend_input");
+            $attrFrontendInput = $product->getResource()
+                ->getAttribute($attrCode)
+                ->getData("frontend_input");
             if ($attrFrontendInput == "select") {
                 if ($product->getData($attrCode)) {
                     $attrData = $product->getResource()->getAttribute($attrCode)
@@ -755,11 +757,15 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 }
                 return $attrData;
             } elseif ($attrFrontendInput == "multiselect") {
-                $attrData = $product->getResource()->getAttribute($attrCode)->getFrontend()->getValue($product);
+                $attrData = $product->getResource()
+                    ->getAttribute($attrCode)
+                    ->getFrontend()
+                    ->getValue($product);
                 return $attrData;
             } elseif ($attrFrontendInput == "media_image") {
                 if ($product->getData($attrCode)) {
-                    $attrData = $product->getMediaConfig()->getMediaUrl($product->getData($attrCode));
+                    $attrData = $product->getMediaConfig()
+                        ->getMediaUrl($product->getData($attrCode));
                     return $attrData;
                 }
             }
@@ -771,29 +777,36 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Get Product Image Attributes
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param string $attrCode
      * @return mixed
      */
-    public function getAttrImg($product, $attrCode)
-    {
-        return $product->getResource()->getAttribute($attrCode)->getFrontend()->getValue($product);
+    public function getImgAttr(
+        \Magento\Catalog\Model\Product $product,
+        string $attrCode
+    ): mixed {
+        return $product->getResource()
+            ->getAttribute($attrCode)
+            ->getFrontend()
+            ->getValue($product);
     }
 
     /**
      * Get Category Name
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
-     * @param Magento\Store\Model\StoreManagerInterface $store
+     * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
      * @return string
      */
-    public function getCategoryName($product, $store)
-    {
+    public function getCategoryName(
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): string {
         $catIds = $product->getCategoryIds();
         if (is_array($catIds) && count($catIds)) {
             $catId = end($catIds);
             $cat   = $this->categoryFactory->create()
-                ->setStoreId($store->getId())
+                ->setStoreId($storeId)
                 ->load($catId);
             if ($cat->getId()) {
                 if ($cat->getName()) {
@@ -808,26 +821,28 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Get Category Tree
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
-     * @param Magento\Store\Model\StoreManagerInterface $store
+     * @param \Magento\Catalog\Model\Product $product
+     * @param \Magento\Store\Model\Store $store
      * @return string
      */
-    public function getCategoryTree($product, $store)
-    {
-        $storeId     = $store->getId();
+    public function getCategoryTree(
+        \Magento\Catalog\Model\Product $product,
+        \Magento\Store\Model\Store $store
+    ): string {
+        $j = 0;
+        $storeId = $store->getId();
         $categoryIds = $product->getCategoryIds();
-        $rootCatId   = $store->getRootCategoryId();
-        $j           = 0;
-        $result      = "";
-        $arrayCat    = [];
+        $rootCatId = $store->getRootCategoryId();
+        $result = "";
+        $arrayCat = [];
         while ($j < count($categoryIds)) {
             $categoryId = $categoryIds[$j];
             if ($categoryId > 0) {
-                $category     = $this->categoryFactory->create()
+                $category = $this->categoryFactory->create()
                     ->setStoreId($storeId)
                     ->load($categoryId);
+                $i = 0;
                 $parentCatIds = $category->getParentIds();
-                $i            = 0;
                 $categoryTree = "";
                 if (count($parentCatIds) > 0) {
                     while ($i < count($parentCatIds)) {
@@ -860,8 +875,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                     ->load($catId);
 
                 // remove if exist parent category
+                $z = 0;
                 $parentCatIds = $category->getParentIds();
-                $z            = 0;
                 if (count($parentCatIds) > 0) {
                     while ($z < count($parentCatIds)) {
                         $parentCatId = $parentCatIds[$z];
@@ -883,25 +898,26 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Get Custom Category Tree
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
-     * @param Magento\Store\Model\StoreManagerInterface $store
+     * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
      * @return string
      */
-    public function getCategoryTreeCustom($product, $store)
-    {
-        $storeId     = $store->getId();
+    public function getCategoryTreeCustom(
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): string {
+        $j = 0;
         $categoryIds = $product->getCategoryIds();
-        $j           = 0;
-        $result      = "";
-        $arrayCat    = [];
+        $result = "";
+        $arrayCat = [];
         while ($j < count($categoryIds)) {
             $categoryId = $categoryIds[$j];
             if ($categoryId > 0) {
-                $category     = $this->categoryFactory->create()
+                $category = $this->categoryFactory->create()
                     ->setStoreId($storeId)
                     ->load($categoryId);
+                $i = 0;
                 $parentCatIds = $category->getParentIds();
-                $i            = 0;
                 $categoryTree = "";
                 if (count($parentCatIds) > 0) {
                     while ($i < count($parentCatIds)) {

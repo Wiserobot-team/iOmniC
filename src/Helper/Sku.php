@@ -11,6 +11,8 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Helper;
 
 use Magento\Catalog\Api\ProductRepositoryInterface;
@@ -21,14 +23,13 @@ class Sku extends \Magento\Framework\App\Helper\AbstractHelper
      * @var ProductRepositoryInterface
      */
     public $productRepository;
-
     /**
      * @param ProductRepositoryInterface $productRepository
      */
     public function __construct(
         ProductRepositoryInterface $productRepository
     ) {
-        $this->productRepository   = $productRepository;
+        $this->productRepository = $productRepository;
     }
 
     /**
@@ -38,8 +39,10 @@ class Sku extends \Magento\Framework\App\Helper\AbstractHelper
      * @param int $storeId
      * @return false|\Magento\Catalog\Api\Data\ProductInterface
      */
-    public function loadBySku($sku, $storeId = 0)
-    {
+    public function loadBySku(
+        string $sku,
+        int $storeId = 0
+    ): false|\Magento\Catalog\Api\Data\ProductInterface {
         try {
             if ($storeId) {
                 $product = $this->productRepository->get($sku, false, $storeId);
@@ -49,33 +52,6 @@ class Sku extends \Magento\Framework\App\Helper\AbstractHelper
         } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
             $product = false;
         }
-
-        if (!$product || !$product->getId()) {
-            return false;
-        }
-
-        return $product;
-    }
-
-    /**
-     * Load product by product id
-     *
-     * @param int $productId
-     * @param int $storeId
-     * @return false|\Magento\Catalog\Api\Data\ProductInterface
-     */
-    public function loadById($productId, $storeId = 0)
-    {
-        try {
-            if ($storeId) {
-                $product = $this->productRepository->getById($productId, false, $storeId);
-            } else {
-                $product = $this->productRepository->getById($productId);
-            }
-        } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
-            $product = false;
-        }
-
         if (!$product || !$product->getId()) {
             return false;
         }

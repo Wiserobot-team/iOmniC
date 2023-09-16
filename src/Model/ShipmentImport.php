@@ -11,6 +11,8 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\Filesystem;
@@ -18,6 +20,7 @@ use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\Convert\Order as ConvertOrder;
 use Magento\Sales\Model\Order\Shipment\TrackFactory as ShipmentTrackFactory;
+use Magento\Framework\Webapi\Exception as WebapiException;
 
 class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
 {
@@ -26,13 +29,9 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      */
     public $logFile = "wr_io_shipment_import.log";
     /**
-     * @var bool
-     */
-    public $showLog = false;
-    /**
      * @var array
      */
-    public $results  = [];
+    public array $results = [];
     /**
      * @var Filesystem
      */
@@ -57,14 +56,14 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      * @param ShipmentTrackFactory $shipmentTrackFactory
      */
     public function __construct(
-        Filesystem                  $filesystem,
-        OrderFactory                $orderFactory,
-        ConvertOrder                $convertOrder,
-        ShipmentTrackFactory        $shipmentTrackFactory
+        Filesystem $filesystem,
+        OrderFactory $orderFactory,
+        ConvertOrder $convertOrder,
+        ShipmentTrackFactory $shipmentTrackFactory
     ) {
-        $this->filesystem           = $filesystem;
-        $this->orderFactory         = $orderFactory;
-        $this->convertOrder         = $convertOrder;
+        $this->filesystem = $filesystem;
+        $this->orderFactory = $orderFactory;
+        $this->convertOrder = $convertOrder;
         $this->shipmentTrackFactory = $shipmentTrackFactory;
     }
 
@@ -72,14 +71,14 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      * Import Shipment
      *
      * @param string $orderId
-     * @param array $shipmentInfo
+     * @param mixed $shipmentInfo
      * @return array
      */
-    public function import($orderId, $shipmentInfo)
+    public function import(string $orderId, mixed $shipmentInfo): array
     {
         // response messages
         $this->results["response"]["data"]["success"] = [];
-        $this->results["response"]["data"]["error"]   = [];
+        $this->results["response"]["data"]["error"] = [];
 
         $errorMess = "data request error";
 
@@ -89,7 +88,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
 
         // shipment info
@@ -98,7 +97,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
         foreach ($shipmentInfo as $_shipment) {
             if (!isset($_shipment["shipping_date"]) || !$_shipment["shipping_date"]
@@ -108,7 +107,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
                 $this->results["response"]["data"]["error"][] = $message;
                 $this->log("ERROR: " . $message);
                 $this->cleanResponseMessages();
-                throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+                throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
             }
             foreach ($_shipment["item_info"] as $item) {
                 if (!isset($item["sku"]) || !$item["sku"] || !isset($item["qty"]) || !$item["qty"]) {
@@ -116,7 +115,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
                     $this->results["response"]["data"]["error"][] = $message;
                     $this->log("ERROR: " . $message);
                     $this->cleanResponseMessages();
-                    throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+                    throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
                 }
             }
             foreach ($_shipment["track_info"] as $track) {
@@ -126,7 +125,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
                     $this->results["response"]["data"]["error"][] = $message;
                     $this->log("ERROR: " . $message);
                     $this->cleanResponseMessages();
-                    throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+                    throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
                 }
             }
         }
@@ -138,7 +137,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
             return $this->results;
         } catch (\Exception $e) {
             $errorMess = "shipment import error";
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
     }
 
@@ -147,57 +146,61 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      *
      * @param string $orderId
      * @param array $shipmentInfo
-     * @return void
+     * @return bool
      */
-    public function importIoShipment($orderId, $shipmentInfo)
+    public function importIoShipment(string $orderId, array $shipmentInfo): bool
     {
-        try {
-            $order = $this->orderFactory->create()->loadByIncrementId($orderId);
-            if ($order && $order->getId()) {
-                if ($order->getStatus() == "closed") {
-                    $message = "Skip order " . $orderId . " has been closed";
-                    $this->results["response"]["data"]["success"][] = $message;
-                    $this->log($message);
-                    return;
-                }
-                if ($order->hasShipments()) {
-                    $message = "Skip order " . $orderId . " has been shipped";
-                    $this->results["response"]["data"]["success"][] = $message;
-                    $this->log($message);
-                    return;
-                }
+        $order = $this->orderFactory->create()
+            ->loadByIncrementId($orderId);
+        if ($order && $order->getId()) {
+            if ($order->getStatus() == "closed") {
+                $message = "Skip order " . $orderId . " has been closed";
+                $this->results["response"]["data"]["success"][] = $message;
+                $this->log($message);
+                return false;
+            }
+            if ($order->hasShipments()) {
+                $message = "Skip order " . $orderId . " has been shipped";
+                $this->results["response"]["data"]["success"][] = $message;
+                $this->log($message);
+                return false;
+            }
+            try {
                 // create shipment for order
                 $this->createShipment($order, $shipmentInfo);
-            } else {
-                $message = "WARN cannot load order " . $orderId;
+                return true;
+            } catch (\Exception $e) {
+                $message = $orderId . ": " . $e->getMessage();
                 $this->results["response"]["data"]["error"][] = $message;
-                $this->log($message);
-                return;
+                $this->log("ERROR " . $message);
+                $this->cleanResponseMessages();
+                throw new WebapiException(__($e->getMessage()), 0, 400);
             }
-        } catch (\Exception $e) {
-            $message = $orderId . ": " . $e->getMessage();
+        } else {
+            $message = "WARN cannot load order " . $orderId;
             $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR " . $message);
-            $this->cleanResponseMessages();
-            throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
+            $this->log($message);
+            return false;
         }
     }
 
     /**
      * Create Shipment
      *
-     * @param Magento\Sales\Model\OrderFactory $order
+     * @param \Magento\Sales\Model\Order $order
      * @param array $shipmentInfo
-     * @return void
+     * @return bool
      */
-    public function createShipment($order, $shipmentInfo)
-    {
+    public function createShipment(
+        \Magento\Sales\Model\Order $order,
+        array $shipmentInfo
+    ): bool {
         $orderId = $order->getIncrementId();
         if ($order->hasShipments()) {
             $message = "Skip order " . $orderId . " for already has shipment";
             $this->results["response"]["data"]["success"][] = $message;
             $this->log($message);
-            return;
+            return false;
         }
 
         // create shipment
@@ -240,8 +243,8 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
                     }
                 }
 
-                $carrierCode  = $trackInfo["carrier_code"];
-                $className    = $trackInfo["title"];
+                $carrierCode = $trackInfo["carrier_code"];
+                $className = $trackInfo["title"];
                 $shippingDate = $_shipmentInfo["shipping_date"];
 
                 $trackingDetail = [
@@ -252,7 +255,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
                 ];
 
                 $convertOrder = $this->convertOrder;
-                $shipment     = $convertOrder->toShipment($order);
+                $shipment = $convertOrder->toShipment($order);
                 $shipment->setCreatedAt($shippingDate);
 
                 foreach ($order->getAllItems() as $orderItem) {
@@ -261,27 +264,31 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
                     }
                     foreach ($_shipmentInfo["item_info"] as $itemInfo) {
                         if ($itemInfo["sku"] == $orderItem->getSku()) {
-                            $qtyShipped   = (int) $itemInfo["qty"];
-                            $shipmentItem = $convertOrder->itemToShipmentItem($orderItem)->setQty($qtyShipped);
+                            $qtyShipped = (int) $itemInfo["qty"];
+                            $shipmentItem = $convertOrder->itemToShipmentItem($orderItem)
+                                ->setQty($qtyShipped);
                             $shipment->addItem($shipmentItem);
                         }
                     }
                 }
 
-                $track = $this->shipmentTrackFactory->create()->addData($trackingDetail);
+                $track = $this->shipmentTrackFactory->create()
+                    ->addData($trackingDetail);
                 $shipment->addTrack($track);
                 $shipment->register();
                 $shipment->getOrder()->setIsInProcess(true);
                 $shipment->save();
                 $shipment->getOrder()->save();
                 $shipmentId = $shipment->getIncrementId();
-                $message    = "Shipment '" . $shipmentId . "' imported for order " . $orderId;
+                $message = "Shipment '" . $shipmentId . "' imported for order " . $orderId;
                 $this->results["response"]["data"]["success"][] = $message;
                 $this->log($message);
             } catch (\Exception $e) {
-                throw new \Magento\Framework\Webapi\Exception(__("create shipment " . $e->getMessage()), 0, 400);
+                throw new WebapiException(__("create shipment " . $e->getMessage()), 0, 400);
             }
         }
+
+        return false;
     }
 
     /**
@@ -289,7 +296,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      *
      * @return void
      */
-    public function cleanResponseMessages()
+    public function cleanResponseMessages(): void
     {
         if (count($this->results["response"])) {
             foreach ($this->results["response"] as $key => $value) {
@@ -299,7 +306,8 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
                 if (isset($value["error"]) && !count($value["error"])) {
                     unset($this->results["response"][$key]["error"]);
                 }
-                if (isset($this->results["response"][$key]) && !count($this->results["response"][$key])) {
+                if (isset($this->results["response"][$key]) &&
+                    !count($this->results["response"][$key])) {
                     unset($this->results["response"][$key]);
                 }
                 if (isset($this->results["response"][$key]["success"]) &&
@@ -322,7 +330,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      * @param string $message
      * @return void
      */
-    public function log($message)
+    public function log(string $message): void
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
         $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);

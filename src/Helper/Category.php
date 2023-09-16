@@ -11,6 +11,8 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Helper;
 
 use Magento\Store\Model\StoreManagerInterface;
@@ -19,17 +21,9 @@ use Magento\Catalog\Model\CategoryFactory;
 class Category extends \Magento\Framework\App\Helper\AbstractHelper
 {
     /**
-     * @var array
+     * @var mixed
      */
-    public $pathIndex    = [];
-    /**
-     * @var array
-     */
-    public $categoryData = [];
-    /**
-     * @var null
-     */
-    public $logModel     = null;
+    public mixed $logModel = null;
     /**
      * @var StoreManagerInterface
      */
@@ -44,25 +38,28 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @param CategoryFactory $categoryFactory
      */
     public function __construct(
-        StoreManagerInterface  $storeManager,
-        CategoryFactory        $categoryFactory
+        StoreManagerInterface $storeManager,
+        CategoryFactory $categoryFactory
     ) {
-        $this->storeManager    = $storeManager;
+        $this->storeManager = $storeManager;
         $this->categoryFactory = $categoryFactory;
     }
 
     /**
      * Split category tree and to path and process path to create categories
      *
-     * @param array $tree
+     * @param string $tree
      * @param int $storeId
      * @param bool $allowCreateCat
      * @return array
      */
-    public function processCategoryTree($tree, $storeId, $allowCreateCat)
-    {
+    public function processCategoryTree(
+        string $tree,
+        int $storeId,
+        bool $allowCreateCat
+    ): array {
         // paths are split by :: or :
-        $paths  = preg_split("/(::|:|,)/", $tree);
+        $paths = preg_split("/(::|:|,)/", $tree);
         $result = [];
         foreach ($paths as $path) {
             $path = trim((string) $path);
@@ -84,21 +81,24 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @param bool $allowCreate
      * @return array
      */
-    public function processCategoryPath($path, $storeId, $allowCreate = false)
-    {
+    public function processCategoryPath(
+        string $path,
+        int $storeId,
+        bool $allowCreate = false
+    ): array {
         // name is split by / or > or \
         $categoryLevels = preg_split("/(\/|>|\\\)/", (string) $path);
-        $store          = $this->storeManager->getStore()->load($storeId);
-        $rootCatId      = $store->getRootCategoryId();
-        $rootCat        = $this->categoryFactory->create()->load($rootCatId);
-        $parentId       = $rootCatId;
-        $resultCatIds   = [];
+        $store = $this->storeManager->getStore()->load($storeId);
+        $rootCatId = $store->getRootCategoryId();
+        $rootCat = $this->categoryFactory->create()->load($rootCatId);
+        $parentId = $rootCatId;
+        $resultCatIds = [];
         foreach ($categoryLevels as $levelName) {
             $levelName  = trim((string) $levelName);
             if (!$levelName || in_array($levelName, [$rootCat->getName()])) {
                 continue;
             }
-            $newLevelId = $this->createOrSearchCategory($levelName, $parentId, $allowCreate);
+            $newLevelId = $this->createOrSearchCategory($levelName, (int) $parentId, $allowCreate);
             if (!$newLevelId) {
                 break;
             } else {
@@ -116,10 +116,13 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $nameToCreate
      * @param int $parentId
      * @param bool $allowCreate
-     * @return int
+     * @return mixed
      */
-    public function createOrSearchCategory($nameToCreate, $parentId, $allowCreate = false)
-    {
+    public function createOrSearchCategory(
+        string $nameToCreate,
+        int $parentId,
+        bool $allowCreate = false
+    ): mixed {
         $existingId = $this->searchCategoryId($nameToCreate, $parentId);
         if (!$existingId && $allowCreate) {
             $newCategory = $this->categoryFactory->create();
@@ -129,7 +132,6 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
             $newCategory->setIsAnchor(1);
             $newCategory->setParentId($parentId);
             $parentCategory = $this->categoryFactory->create()->load($parentId);
-
             $newCategory->setPath($parentCategory->getPath());
             try {
                 $newCategory->save();
@@ -156,21 +158,22 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      *
      * @param string $categoryName
      * @param int $parentId
-     * @return int
+     * @return mixed
      */
-    public function searchCategoryId($categoryName, $parentId = null)
-    {
-        $foundId    = false;
+    public function searchCategoryId(
+        string $categoryName,
+        int $parentId
+    ): mixed {
+        $foundId = false;
         $collection = $this->categoryFactory->create()
-                        ->getCollection()
-                        ->addFieldToFilter("name", $categoryName);
+            ->getCollection()
+            ->addFieldToFilter("name", $categoryName);
         if ($parentId) {
             $collection->addFieldToFilter("parent_id", $parentId);
         }
-
-        $foundIds    = $collection->getAllIds();
+        $foundIds = $collection->getAllIds();
         if (count($foundIds)) {
-            $foundId =  array_shift($foundIds);
+            $foundId = array_shift($foundIds);
         }
 
         return $foundId;
@@ -182,7 +185,7 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $message
      * @return void
      */
-    public function log($message)
+    public function log(string $message): void
     {
         if ($this->logModel !== null) {
             $this->logModel->log($message);

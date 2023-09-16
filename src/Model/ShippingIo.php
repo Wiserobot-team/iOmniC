@@ -11,6 +11,8 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
@@ -32,10 +34,10 @@ class ShippingIo implements \WiseRobot\Io\Api\ShippingIoInterface
      * @param ShippingConfig $shippingConfig
      */
     public function __construct(
-        ScopeConfigInterface  $scopeConfig,
-        ShippingConfig        $shippingConfig
+        ScopeConfigInterface $scopeConfig,
+        ShippingConfig $shippingConfig
     ) {
-        $this->scopeConfig    = $scopeConfig;
+        $this->scopeConfig = $scopeConfig;
         $this->shippingConfig = $shippingConfig;
     }
 
@@ -44,22 +46,24 @@ class ShippingIo implements \WiseRobot\Io\Api\ShippingIoInterface
      *
      * @return array
      */
-    public function getList()
+    public function getList(): array
     {
-        $shipMethods    = [];
-        // $activeCarriers = $this->shippingConfig->getAllCarriers();
+        $shipMethods = [];
         $activeCarriers = $this->shippingConfig->getActiveCarriers();
         foreach ($activeCarriers as $carrierCode => $carrierModel) {
-            $carrierTitle = $this->scopeConfig->getValue('carriers/' . $carrierCode . '/title');
-            if ($carrierMethods = $carrierModel->getAllowedMethods()) {
+            $carrierTitle = $this->scopeConfig->getValue(
+                'carriers/' . $carrierCode . '/title'
+            );
+            $carrierMethods = $carrierModel->getAllowedMethods();
+            if ($carrierMethods) {
                 foreach ($carrierMethods as $methodCode => $methodLabel) {
                     if (is_array($methodLabel)) {
                         foreach ($methodLabel as $methodLabelKey => $methodLabelValue) {
                             $shipMethods[][$methodLabelKey] = $methodLabelValue;
                         }
                     } else {
-                        $shipMethod                 = $carrierCode . "_" . $methodCode;
-                        $shipMethodTitle            = $carrierTitle . " - " . $methodLabel;
+                        $shipMethod = $carrierCode . "_" . $methodCode;
+                        $shipMethodTitle = $carrierTitle . " - " . $methodLabel;
                         $shipMethods[][$shipMethod] = $shipMethodTitle;
                     }
                 }

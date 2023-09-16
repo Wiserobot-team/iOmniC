@@ -11,6 +11,8 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Api;
 
 interface PaymentIoInterface
@@ -20,5 +22,5 @@ interface PaymentIoInterface
      *
      * @return array
      */
-    public function getList();
+    public function getList(): array;
 }

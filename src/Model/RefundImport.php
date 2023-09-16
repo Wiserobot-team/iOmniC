@@ -11,12 +11,15 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\Order\CreditmemoFactory;
+use Magento\Framework\Webapi\Exception as WebapiException;
 
 class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
 {
@@ -25,13 +28,9 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      */
     public $logFile = "wr_io_refund_import.log";
     /**
-     * @var bool
-     */
-    public $showLog = false;
-    /**
      * @var array
      */
-    public $results  = [];
+    public array $results = [];
     /**
      * @var Filesystem
      */
@@ -51,12 +50,12 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      * @param CreditmemoFactory $creditMemoFactory
      */
     public function __construct(
-        Filesystem               $filesystem,
-        OrderFactory             $orderFactory,
-        CreditmemoFactory        $creditMemoFactory
+        Filesystem $filesystem,
+        OrderFactory $orderFactory,
+        CreditmemoFactory $creditMemoFactory
     ) {
-        $this->filesystem        = $filesystem;
-        $this->orderFactory      = $orderFactory;
+        $this->filesystem = $filesystem;
+        $this->orderFactory = $orderFactory;
         $this->creditMemoFactory = $creditMemoFactory;
     }
 
@@ -64,14 +63,14 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      * Import Order
      *
      * @param string $orderId
-     * @param array $refundInfo
+     * @param mixed $refundInfo
      * @return array
      */
-    public function import($orderId, $refundInfo)
+    public function import(string $orderId, mixed $refundInfo): array
     {
         // response messages
         $this->results["response"]["data"]["success"] = [];
-        $this->results["response"]["data"]["error"]   = [];
+        $this->results["response"]["data"]["error"] = [];
 
         $errorMess = "data request error";
 
@@ -81,7 +80,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
 
         // refund info
@@ -90,7 +89,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
         foreach ($refundInfo as $_refund) {
             if (!isset($_refund["refund_date"]) || !$_refund["refund_date"] ||
@@ -100,7 +99,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                 $this->results["response"]["data"]["error"][] = $message;
                 $this->log("ERROR: " . $message);
                 $this->cleanResponseMessages();
-                throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+                throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
             }
             foreach ($_refund["item_info"] as $item) {
                 if (!isset($item["sku"]) || !$item["sku"] ||
@@ -109,7 +108,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                     $this->results["response"]["data"]["error"][] = $message;
                     $this->log("ERROR: " . $message);
                     $this->cleanResponseMessages();
-                    throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+                    throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
                 }
             }
         }
@@ -121,7 +120,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
             return $this->results;
         } catch (\Exception $e) {
             $errorMess = "refund import error";
-            throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400, $this->results["response"]);
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
     }
 
@@ -130,43 +129,45 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      *
      * @param string $orderId
      * @param array $refundInfo
-     * @return void
+     * @return bool
      */
-    public function importIoRefund($orderId, $refundInfo)
+    public function importIoRefund(string $orderId, array $refundInfo): bool
     {
         try {
-            $order = $this->orderFactory->create()->loadByIncrementId($orderId);
+            $order = $this->orderFactory->create()
+                ->loadByIncrementId($orderId);
             if (!$order || !$order->getId()) {
                 $message = "WARN cannot load order " . $orderId;
                 $this->results["response"]["data"]["error"][] = $message;
                 $this->log($message);
-                return;
+                return false;
             }
             $orderIId = $order->getIncrementId();
             if ($order->getStatus() == "closed") {
                 $message = "Skip order " . $orderId . " has been closed";
                 $this->results["response"]["data"]["success"][] = $message;
                 $this->log($message);
-                return;
+                return false;
             }
             if ($order->hasShipments()) {
                 // create credit memo for order
                 if ($order->hasInvoices()) {
                     if (!$order->hasCreditmemos()) {
                         $this->createCreditMemo($order, $refundInfo);
-                        $orderObject = $this->orderFactory->create()->loadByIncrementId($orderIId);
+                        $orderObject = $this->orderFactory->create()
+                            ->loadByIncrementId($orderIId);
                         if ($orderObject->getStatus() != "closed" &&
                             in_array($orderObject->getStatus(), ["complete"])) {
                             $orderObject->setData("status", "closed");
                             $orderObject->setData("state", "closed");
                             $orderObject->save();
-                            return;
+                            return false;
                         }
                     } else {
                         $message = "Skip order " . $orderIId . " has been refunded";
                         $this->results["response"]["data"]["success"][] = $message;
                         $this->log($message);
-                        return;
+                        return false;
                     }
                 } else {
                     $order->setData("status", "closed");
@@ -175,7 +176,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                     $message = "Order " . $orderIId . " set closed status success";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
-                    return;
+                    return false;
                 }
             } else {
                 // check and create credit memo for order
@@ -186,22 +187,24 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                     $message = "Order " . $orderIId . " set closed status success";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
-                    return;
+                    return false;
                 }
                 if (!$order->hasCreditmemos()) {
                     $this->createCreditMemo($order, $refundInfo);
-                    $orderObject = $this->orderFactory->create()->loadByIncrementId($orderIId);
-                    if ($orderObject->getStatus() != "closed" && in_array($orderObject->getStatus(), ["processing"])) {
+                    $orderObject = $this->orderFactory->create()
+                        ->loadByIncrementId($orderIId);
+                    if ($orderObject->getStatus() != "closed" &&
+                        in_array($orderObject->getStatus(), ["processing"])) {
                         $orderObject->setData("status", "closed");
                         $orderObject->setData("state", "closed");
                         $orderObject->save();
-                        return;
+                        return false;
                     }
                 } else {
                     $message = "Skip order " . $orderIId . " has been refunded";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
-                    return;
+                    return false;
                 }
             }
         } catch (\Exception $e) {
@@ -209,25 +212,28 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR " . $message);
             $this->cleanResponseMessages();
-            throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
+            throw new WebapiException(__($e->getMessage()), 0, 400);
         }
+        return true;
     }
 
     /**
      * Create Credit Memo
      *
-     * @param Magento\Sales\Model\OrderFactory $order
+     * @param \Magento\Sales\Model\Order $order
      * @param array $refundInfo
-     * @return void
+     * @return bool
      */
-    public function createCreditMemo($order, $refundInfo)
-    {
-        $orderIId                 = $order->getIncrementId();
-        $shippingRefundedTotal    = 0;
+    public function createCreditMemo(
+        \Magento\Sales\Model\Order $order,
+        array $refundInfo
+    ): bool {
+        $orderIId = $order->getIncrementId();
+        $shippingRefundedTotal = 0;
         $shippingTaxRefundedTotal = 0;
-        $taxRefundedTotal         = 0;
-        $subtotalRefundedTotal    = 0;
-        $totalRefundedTotal       = 0;
+        $taxRefundedTotal = 0;
+        $subtotalRefundedTotal = 0;
+        $totalRefundedTotal = 0;
         foreach ($refundInfo as $_refundInfo) {
             // item info
             if (!isset($_refundInfo["item_info"]) || !count($_refundInfo["item_info"]) ||
@@ -246,7 +252,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
             }
             $infoItems = [];
             foreach ($_refundInfo["item_info"] as $itemInfo) {
-                $sku       = $itemInfo["sku"];
+                $sku = $itemInfo["sku"];
                 $qtyRefund = (int) $itemInfo["qty"];
                 foreach ($order->getAllItems() as $orderItem) {
                     if ($orderItem->getSku() == $sku) {
@@ -258,7 +264,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                 $message =  "WARN create credit memo for order " . $orderIId . " items ordered do not match";
                 $this->results["response"]["data"]["error"][] = $message;
                 $this->log($message);
-                return;
+                return false;
             }
             $creditMemoData = [
                 'qtys' => $infoItems
@@ -266,33 +272,36 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
             try {
                 $creditMemo = $this->creditMemoFactory->createByOrder($order, $creditMemoData);
                 $creditMemo->save();
-                $shippingRefundedTotal    += (float) $creditMemo->getData("base_shipping_amount");
+                $shippingRefundedTotal += (float) $creditMemo->getData("base_shipping_amount");
                 $shippingTaxRefundedTotal += (float) $creditMemo->getData("shipping_tax_amount");
-                $taxRefundedTotal         += (float) $creditMemo->getData("tax_amount");
-                $subtotalRefundedTotal    += (float) $creditMemo->getData("subtotal");
-                $totalRefundedTotal       += (float) $creditMemo->getData("base_grand_total");
+                $taxRefundedTotal += (float) $creditMemo->getData("tax_amount");
+                $subtotalRefundedTotal += (float) $creditMemo->getData("subtotal");
+                $totalRefundedTotal += (float) $creditMemo->getData("base_grand_total");
 
                 $message = "Credit Memo '" . $creditMemo->getIncrementId() . "' imported for order " . $orderIId;
                 $this->results["response"]["data"]["success"][] = $message;
                 $this->log($message);
+
+                // reset order after save credit memo
+                $order->setData("shipping_refunded", $shippingRefundedTotal);
+                $order->setData("base_shipping_refunded", $shippingRefundedTotal);
+                $order->setData("shipping_tax_refunded", $shippingTaxRefundedTotal);
+                $order->setData("tax_refunded", $taxRefundedTotal);
+                $order->setData("base_tax_refunded", $taxRefundedTotal);
+                $order->setData("subtotal_refunded", $subtotalRefundedTotal);
+                $order->setData("base_subtotal_refunded", $subtotalRefundedTotal);
+                $order->setData("total_refunded", $totalRefundedTotal);
+                $order->setData("base_total_refunded", $totalRefundedTotal);
+                $order->save();
+                return true;
             } catch (\Exception $e) {
                 $errorMess = "Error while create credit memo " . $e->getMessage();
                 $this->results["response"]["data"]["error"][] = $errorMess;
                 $this->log("ERROR " . $errorMess);
-                throw new \Magento\Framework\Webapi\Exception(__($errorMess), 0, 400);
+                throw new WebapiException(__($errorMess), 0, 400);
             }
         }
-        // reset order after save credit memo
-        $order->setData("shipping_refunded", $shippingRefundedTotal);
-        $order->setData("base_shipping_refunded", $shippingRefundedTotal);
-        $order->setData("shipping_tax_refunded", $shippingTaxRefundedTotal);
-        $order->setData("tax_refunded", $taxRefundedTotal);
-        $order->setData("base_tax_refunded", $taxRefundedTotal);
-        $order->setData("subtotal_refunded", $subtotalRefundedTotal);
-        $order->setData("base_subtotal_refunded", $subtotalRefundedTotal);
-        $order->setData("total_refunded", $totalRefundedTotal);
-        $order->setData("base_total_refunded", $totalRefundedTotal);
-        $order->save();
+        return false;
     }
 
     /**
@@ -300,7 +309,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      *
      * @return void
      */
-    public function cleanResponseMessages()
+    public function cleanResponseMessages(): void
     {
         if (count($this->results["response"])) {
             foreach ($this->results["response"] as $key => $value) {
@@ -310,7 +319,8 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                 if (isset($value["error"]) && !count($value["error"])) {
                     unset($this->results["response"][$key]["error"]);
                 }
-                if (isset($this->results["response"][$key]) && !count($this->results["response"][$key])) {
+                if (isset($this->results["response"][$key]) &&
+                    !count($this->results["response"][$key])) {
                     unset($this->results["response"][$key]);
                 }
                 if (isset($this->results["response"][$key]["success"]) &&
@@ -333,7 +343,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      * @param string $message
      * @return void
      */
-    public function log($message)
+    public function log(string $message): void
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
         $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);

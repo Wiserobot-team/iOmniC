@@ -11,16 +11,14 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
+declare(strict_types=1);
+
 namespace WiseRobot\Io\Helper;
 
-use Magento\Catalog\Model\Category as ModelCategory;
 use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Catalog\Model\ProductFactory;
-use Magento\Catalog\Model\Product\Gallery\ReadHandler as GalleryReadHandler;
-use Magento\Catalog\Model\Product\Gallery\Processor as GalleryProcessor;
-use Magento\Catalog\Model\ResourceModel\Product\Gallery as ProductGallery;
 use Magento\Framework\Filesystem\Driver\File;
 use WiseRobot\Io\Model\ProductImageFactory;
 
@@ -29,7 +27,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * @var array
      */
-    public $currentPlacements = [];
+    public array $currentPlacements = [];
     /**
      * @var Filesystem
      */
@@ -43,18 +41,6 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      */
     public $productFactory;
     /**
-     * @var GalleryReadHandler
-     */
-    public $galleryReadHandler;
-    /**
-     * @var GalleryProcessor
-     */
-    public $galleryProcessor;
-    /**
-     * @var ProductGallery
-     */
-    public $productGallery;
-    /**
      * @var File
      */
     public $driverFile;
@@ -67,49 +53,42 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @param Filesystem $filesystem
      * @param ScopeConfigInterface $scopeConfig
      * @param ProductFactory $productFactory
-     * @param GalleryReadHandler $galleryReadHandler
-     * @param GalleryProcessor $galleryProcessor
-     * @param ProductGallery $productGallery
      * @param File $driverFile
      * @param ProductImageFactory $productImageFactory
      */
     public function __construct(
-        Filesystem                 $filesystem,
-        ScopeConfigInterface       $scopeConfig,
-        ProductFactory             $productFactory,
-        GalleryReadHandler         $galleryReadHandler,
-        GalleryProcessor           $galleryProcessor,
-        ProductGallery             $productGallery,
-        File                       $driverFile,
-        ProductImageFactory        $productImageFactory
+        Filesystem $filesystem,
+        ScopeConfigInterface $scopeConfig,
+        ProductFactory $productFactory,
+        File $driverFile,
+        ProductImageFactory $productImageFactory
     ) {
-        $this->filesystem          = $filesystem;
-        $this->scopeConfig         = $scopeConfig;
-        $this->productFactory      = $productFactory;
-        $this->galleryReadHandler  = $galleryReadHandler;
-        $this->galleryProcessor    = $galleryProcessor;
-        $this->productGallery      = $productGallery;
-        $this->driverFile          = $driverFile;
+        $this->filesystem = $filesystem;
+        $this->scopeConfig = $scopeConfig;
+        $this->productFactory = $productFactory;
+        $this->driverFile = $driverFile;
         $this->productImageFactory = $productImageFactory;
     }
 
     /**
      * Populate image to product gallery
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param array $imagePlacementsToSet
-     * @param WiseRobot\Io\Model\ProductImport $importModel
+     * @param \WiseRobot\Io\Model\ProductImport $importModel
      * @return int
      */
-    public function populateProductImage($product, $imagePlacementsToSet, $importModel)
-    {
+    public function populateProductImage(
+        \Magento\Catalog\Model\Product $product,
+        array $imagePlacementsToSet,
+        \WiseRobot\Io\Model\ProductImport $importModel
+    ): int {
         $totalImagesAdded = 0;
         if (!$product || !$product->getId()) {
             return $totalImagesAdded;
         }
-        // $product = $this->productFactory->create()->setStoreId(0)->load($product->getId())
-        // $this->galleryReadHandler->execute($product);
-        $sku       = $product->getSku();
+
+        $sku = $product->getSku();
         $productId = $product->getId();
 
         $this->currentPlacements = [
@@ -136,20 +115,18 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         ];
 
         $currentImagePlacements = $this->currentPlacements;
-
-        $oldImages = $this->getProductImageImportUrl($product);
+        $oldImages = $this->getProductImageImportUrl($sku);
 
         // flag for product base image
         $flag = true;
         foreach ($currentImagePlacements as $currentImagePlacement) {
             $currentPlacementName = $currentImagePlacement["name"];
-            $imgPos               = $currentImagePlacement["image_placement_order"];
+            $imgPos = $currentImagePlacement["image_placement_order"];
             // if it has image to set
             if (isset($imagePlacementsToSet[$currentPlacementName])) {
                 if (isset($oldImages[$currentPlacementName])
                     && $oldImages[$currentPlacementName]['image'] == $imagePlacementsToSet[$currentPlacementName]) {
                     $flag = false;
-
                     // if stored image url is same as current url then we do nothing
                     continue;
                 }
@@ -173,7 +150,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
             $flag = false;
         }
 
-        $this->saveProductImageImportUrl($product, $imagePlacementsToSet);
+        $this->saveProductImageImportUrl($sku, $imagePlacementsToSet);
 
         if ($totalImagesAdded) {
             try {
@@ -194,31 +171,37 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * Add image to product gallery
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param string $imageUrl
-     * @param int $isMainImage
+     * @param bool $isMainImage
      * @param int $position
-     * @param WiseRobot\Io\Model\ProductImport $importModel
-     * @return bool
+     * @param \WiseRobot\Io\Model\ProductImport $importModel
+     * @return int
      */
-    public function addImageToProductGallery(&$product, $imageUrl, $isMainImage, $position, $importModel)
-    {
-        $sku       = $product->getSku();
+    public function addImageToProductGallery(
+        \Magento\Catalog\Model\Product &$product,
+        string $imageUrl,
+        bool $isMainImage,
+        int $position,
+        \WiseRobot\Io\Model\ProductImport $importModel
+    ): int {
+        $sku = $product->getSku();
         $productId = $product->getId();
-        $dir       = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)->getAbsolutePath('io');
+        $dir = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
+            ->getAbsolutePath('io');
         if (!$this->driverFile->isExists($dir)) {
             $this->driverFile->createDirectory($dir);
         }
-        $imageName  = explode("/", (string) $imageUrl);
-        $imageName  = end($imageName);
+        $imageName = explode("/", (string) $imageUrl);
+        $imageName = end($imageName);
         // replace all none standard character with _
-        $imageName  = preg_replace('/[^a-z0-9_\\-\\.]+/i', '_', $imageName);
-        $imageName  = $product->getSku() . "_" . $imageName;
-        $path       = $dir . "/" . $imageName;
+        $imageName = preg_replace('/[^a-z0-9_\\-\\.]+/i', '_', $imageName);
+        $imageName = $product->getSku() . "_" . $imageName;
+        $path = $dir . "/" . $imageName;
 
         try {
             $imageUrl = str_replace(" ", "%20", (string) $imageUrl);
-            $isCopy   = $this->driverFile->copy($imageUrl, $path);
+            $isCopy = $this->driverFile->copy($imageUrl, $path);
             if ($isCopy) {
                 if ($isMainImage) {
                     $mediaArray = [
@@ -232,9 +215,9 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
 
                 $product->addImageToMediaGallery($path, $mediaArray, false, false);
 
-                $gallery               = $product->getData("media_gallery");
+                $gallery = $product->getData("media_gallery");
                 // get image just added
-                $lastImage             = array_pop($gallery["images"]);
+                $lastImage = array_pop($gallery["images"]);
                 $lastImage["position"] = $position;
                 // re-add that image
                 array_push($gallery["images"], $lastImage);
@@ -274,14 +257,17 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * Remove product images
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param int $position
-     * @param WiseRobot\Io\Model\ProductImport $importModel
+     * @param \WiseRobot\Io\Model\ProductImport $importModel
      * @return void
      */
-    public function removeImage(&$product, $position, $importModel)
-    {
-        $sku       = $product->getSku();
+    public function removeImage(
+        \Magento\Catalog\Model\Product &$product,
+        int $position,
+        \WiseRobot\Io\Model\ProductImport $importModel
+    ): void {
+        $sku = $product->getSku();
         $productId = $product->getId();
         try {
             $gallery = $product->getData("media_gallery");
@@ -289,12 +275,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 foreach ($gallery["images"] as &$image) {
                     if ($image["position"] == $position) {
                         $image["removed"] = 1;
-                        // $this->productGallery->deleteGallery($image["value_id"]);
-                        // $this->galleryProcessor->removeImage($product, $image["file"]);
                         $this->deleteProductImage($image["file"], $importModel);
                         $nameImage = explode("/", (string) $image["file"]);
-                        $tamp      = count($nameImage);
-                        $message   = "Sku '" . $sku . "' - product id <" .
+                        $tamp = count($nameImage);
+                        $message = "Sku '" . $sku . "' - product id <" .
                             $productId . "> " . "deleted image '". $nameImage[$tamp-1] . "' at position " . $position;
                         $importModel->results["response"]["image"]["success"][] = $message;
                         $importModel->log($message);
@@ -302,7 +286,9 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 }
                 $product->setData("media_gallery", $gallery);
                 $product->save();
-                $product = $this->productFactory->create()->setStoreId(0)->load($product->getId());
+                $product = $this->productFactory->create()
+                    ->setStoreId(0)
+                    ->load($product->getId());
             }
         } catch (\Exception $e) {
             $message = "Sku '" . $sku . "' - product id <" . $productId . "> remove image: " .  $e->getMessage();
@@ -315,17 +301,18 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * Get product images
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param string $sku
      * @return array
      */
-    public function getProductImageImportUrl($product)
+    public function getProductImageImportUrl(string $sku): array
     {
-        $imageList       = [];
-        $sku             = $product->getSku();
-        $imageCollection = $this->productImageFactory->create()->getCollection()->addFieldToFilter('sku', $sku);
+        $imageList = [];
+        $imageCollection = $this->productImageFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('sku', $sku);
         foreach ($imageCollection as $image) {
             $imageList[$image->getImagePlacement()] = [
-                'id'    => $image->getId(),
+                'id' => $image->getId(),
                 'image' => $image->getImage()
             ];
         }
@@ -336,19 +323,16 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * Save product image from image list
      *
-     * @param Magento\Catalog\Model\ProductFactory $product
+     * @param string $sku
      * @param array $imageList
      * @return void
      */
-    public function saveProductImageImportUrl($product, $imageList)
+    public function saveProductImageImportUrl(string $sku, array $imageList): void
     {
-        $oldList = $this->getProductImageImportUrl($product);
-
+        $oldList = $this->getProductImageImportUrl($sku);
         $currentImagePlacements = $this->currentPlacements;
-
         foreach ($currentImagePlacements as $imagePlacement) {
             $currentPlacementName = $imagePlacement["name"];
-            $currentImageOrder    = $imagePlacement["image_placement_order"];
             if (isset($imageList[$currentPlacementName])) {
                 $ioImage = $this->productImageFactory->create();
                 if (isset($oldList[$currentPlacementName])) {
@@ -357,14 +341,15 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                     }
                     $ioImage->load($oldList[$currentPlacementName]['id']);
                 } else {
-                    $ioImage->setSku($product->getSku())
+                    $ioImage->setSku($sku)
                         ->setImagePlacement($currentPlacementName);
                 }
                 $ioImage->setImage($imageList[$currentPlacementName]);
                 $ioImage->save();
             } else {
                 if (isset($oldList[$currentPlacementName])) {
-                    $ioImage = $this->productImageFactory->create()->load($oldList[$currentPlacementName]['id']);
+                    $ioImage = $this->productImageFactory->create()
+                        ->load($oldList[$currentPlacementName]['id']);
                     $ioImage->delete();
                 }
             }
@@ -375,13 +360,16 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * Delete product image file
      *
      * @param string $path
-     * @param WiseRobot\Io\Model\ProductImport $importModel
+     * @param \WiseRobot\Io\Model\ProductImport $importModel
      * @return void
      */
-    public function deleteProductImage($path, $importModel)
-    {
+    public function deleteProductImage(
+        string $path,
+        \WiseRobot\Io\Model\ProductImport $importModel
+    ): void {
         $imagePath = 'catalog/product/' . trim((string) $path, ' /');
-        $filePath  = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)->getAbsolutePath('') . $imagePath;
+        $filePath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
+                ->getAbsolutePath('') . $imagePath;
         if ($this->driverFile->isExists($filePath)) {
             try {
                 $this->driverFile->deleteFile($filePath);
@@ -398,9 +386,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $sku
      * @return void
      */
-    public function deleteStoredProductImages($sku)
+    public function deleteStoredProductImages(string $sku): void
     {
-        $ioProductImages = $this->productImageFactory->create()->getCollection()
+        $ioProductImages = $this->productImageFactory->create()
+            ->getCollection()
             ->addFieldToFilter("sku", $sku);
         foreach ($ioProductImages as $ioProductImage) {
             $ioProductImage->delete();
