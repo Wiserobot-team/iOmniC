@@ -1,6 +1,6 @@
 {
-  "name": "wiserobot/module-io",
-  "description": "WiseRobot Io",
+  "name": "wiserobot/module-iomnic",
+  "description": "iOmniC provides near real-time connectivity to multiple platforms (ChannelAdvisor, Magento 2, etc.). No more time consuming manual updates necessary. All your Products, Orders, and Fulfillment are automatically synced between platforms within minutes. Our admin UI will help you track the status, details, timestamps, and completion levels of your data. Any transfer errors will show in the dashboard and via email digest with hints on how to fix in your data. You decide the flow of data, and can create/enable/disable/remove any automated process easily.",
   "require": {
     "php": "~7.0.13||~7.1.0||~7.2.0||~7.3.0||~7.4.0||~8.0.0||~8.1.0||~8.2.0",
     "magento/framework": "^102.0||^103.0"
