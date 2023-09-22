@@ -21,7 +21,7 @@ composer require wiserobot/module-io
 You have to enable module
 
 ```shell
-php bin/mangento module:enable Wiserobot_Io
+php bin/mangento module:enable WiseRobot_Io
 
 php bin/magento setup:upgrade
 
@@ -35,7 +35,7 @@ php bin/magento setup:static-content:deploy -f
 If you wanna disable module. You can follow script bellow
 
 ```shell
-php bin/mangento module:disable Wiserobot_Io
+php bin/mangento module:disable WiseRobot_Io
 
 php bin/magento setup:di:compile
 
