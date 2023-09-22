@@ -6,7 +6,7 @@
     "magento/framework": "^102.0||^103.0"
   },
   "type": "magento2-module",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "license": [
     "OSL-3.0",
     "AFL-3.0"
@@ -21,10 +21,10 @@
   },
   "autoload": {
     "files": [
-      "src/registration.php"
+      "registration.php"
     ],
     "psr-4": {
-      "WiseRobot\\Io\\": "src/"
+      "WiseRobot\\Io\\": ""
     }
   }
 }
