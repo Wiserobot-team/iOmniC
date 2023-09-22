@@ -43,5 +43,3 @@ php bin/magento setup:upgrade
 
 php bin/magento setup:static-content:deploy -f
 ```
-
-Released under the MIT License attached with this code.
