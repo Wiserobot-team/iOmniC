@@ -43,14 +43,5 @@ php bin/magento setup:upgrade
 
 php bin/magento setup:static-content:deploy -f
 ```
-## How to sync data to iOmniC
-First, You go to the site [iOmniC](https://app.iomnic.com/) to create an account or login (already account)
-
-In left sidebar, You click to the **Connections**
-  - **Add new target** in content
-
-## How to create an Integration on Magento admin
-You go to **System** > **Integrations**  and create a new Integrations for **iOmniC**
-## License
 
 Released under the MIT License attached with this code.
