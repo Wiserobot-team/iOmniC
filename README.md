@@ -13,7 +13,7 @@ Granular integration controls
 Run the command below to install via Composer
 
 ```shell
-composer require wiserobot/module-io
+composer require wiserobot/module-iomnic
 ```
 
 ## Enable module
