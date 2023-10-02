@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
@@ -46,7 +44,7 @@ class PaymentIo implements \WiseRobot\Io\Api\PaymentIoInterface
      *
      * @return array
      */
-    public function getList(): array
+    public function getList()
     {
         $paymentMethodArray = [];
         $payments = $this->paymentConfig->getActiveMethods();

@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\Filesystem;
@@ -31,7 +29,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
     /**
      * @var array
      */
-    public array $results = [];
+    public $results = [];
     /**
      * @var Filesystem
      */
@@ -74,7 +72,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      * @param mixed $shipmentInfo
      * @return array
      */
-    public function import(string $orderId, mixed $shipmentInfo): array
+    public function import($orderId, $shipmentInfo)
     {
         // response messages
         $this->results["response"]["data"]["success"] = [];
@@ -148,7 +146,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      * @param array $shipmentInfo
      * @return bool
      */
-    public function importIoShipment(string $orderId, array $shipmentInfo): bool
+    public function importIoShipment($orderId, $shipmentInfo)
     {
         $order = $this->orderFactory->create()
             ->loadByIncrementId($orderId);
@@ -192,9 +190,9 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      * @return bool
      */
     public function createShipment(
-        \Magento\Sales\Model\Order $order,
-        array $shipmentInfo
-    ): bool {
+        $order,
+        $shipmentInfo
+    ) {
         $orderId = $order->getIncrementId();
         if ($order->hasShipments()) {
             $message = "Skip order " . $orderId . " for already has shipment";
@@ -296,7 +294,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      *
      * @return void
      */
-    public function cleanResponseMessages(): void
+    public function cleanResponseMessages()
     {
         if (count($this->results["response"])) {
             foreach ($this->results["response"] as $key => $value) {
@@ -330,7 +328,7 @@ class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
      * @param string $message
      * @return void
      */
-    public function log(string $message): void
+    public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
         $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);

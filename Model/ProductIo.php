@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Catalog\Model\ProductFactory;
@@ -32,7 +30,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * @var array
      */
-    public array $results = [];
+    public $results = [];
     /**
      * @var ProductFactory
      */
@@ -184,12 +182,12 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return array
      */
     public function getList(
-        int $store,
-        string $select = "*",
-        string $filter = "",
-        int $page = 1,
-        int $limit = 50
-    ): array {
+        $store,
+        $select = "*",
+        $filter = "",
+        $page = 1,
+        $limit = 50
+    ) {
         // create product collection
         $productCollection = $this->productCollectionFactory->create();
 
@@ -446,7 +444,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param string $string
      * @return string|null
      */
-    public function processFilter(string $string): mixed
+    public function processFilter($string)
     {
         switch ($string) {
             case strpos((string) $string, " eq ") == true:
@@ -476,9 +474,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return array
      */
     public function populateVariationInfo(
-        \Magento\Catalog\Model\Product $product,
-        int $storeId
-    ): array {
+        $product,
+        $storeId
+    ) {
         // default variationInfo
         $variationInfo = [];
         $variationInfo["is_in_relationship"] = false;
@@ -532,8 +530,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return string|false
      */
     public function getRelationshipName(
-        \Magento\Catalog\Model\Product $parentConfigurableProduct
-    ): mixed {
+        $parentConfigurableProduct
+    ) {
         if ($parentConfigurableProduct->getTypeId() != "configurable") {
             return false;
         }
@@ -559,9 +557,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return array
      */
     public function populateGroupedProductInfo(
-        \Magento\Catalog\Model\Product $product,
-        int $storeId
-    ): array {
+        $product,
+        $storeId
+    ) {
         // default groupedInfo
         $groupedInfo = [];
         $groupedInfo["is_parent"] = false;
@@ -607,7 +605,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param int $storeId
      * @return array
      */
-    public function populateImageInfo(int $productId, int $storeId): array
+    public function populateImageInfo($productId, $storeId)
     {
         $imageInfo = [];
         $product = $this->productFactory->create()
@@ -632,7 +630,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param int $storeId
      * @return array
      */
-    public function populateAdditionalImageInfo(int $productId, int $storeId): array
+    public function populateAdditionalImageInfo($productId, $storeId)
     {
         $additionalImage = [];
         $additionalImageLabels = [];
@@ -661,10 +659,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return mixed
      */
     public function getAttrValue(
-        \Magento\Catalog\Model\Product $product,
-        string $attrCode,
-        int $storeId
-    ): mixed {
+        $product,
+        $attrCode,
+        $storeId
+    ) {
         $store = $this->storeManager->getStore()->load($storeId);
         $attrData = $product->getData($attrCode);
         if ($attrCode == "price") {
@@ -782,9 +780,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return mixed
      */
     public function getImgAttr(
-        \Magento\Catalog\Model\Product $product,
-        string $attrCode
-    ): mixed {
+        $product,
+        $attrCode
+    ) {
         return $product->getResource()
             ->getAttribute($attrCode)
             ->getFrontend()
@@ -799,9 +797,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return string
      */
     public function getCategoryName(
-        \Magento\Catalog\Model\Product $product,
-        int $storeId
-    ): string {
+        $product,
+        $storeId
+    ) {
         $catIds = $product->getCategoryIds();
         if (is_array($catIds) && count($catIds)) {
             $catId = end($catIds);
@@ -826,9 +824,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return string
      */
     public function getCategoryTree(
-        \Magento\Catalog\Model\Product $product,
-        \Magento\Store\Model\Store $store
-    ): string {
+        $product,
+        $store
+    ) {
         $j = 0;
         $storeId = $store->getId();
         $categoryIds = $product->getCategoryIds();
@@ -903,9 +901,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @return string
      */
     public function getCategoryTreeCustom(
-        \Magento\Catalog\Model\Product $product,
-        int $storeId
-    ): string {
+        $product,
+        $storeId
+    ) {
         $j = 0;
         $categoryIds = $product->getCategoryIds();
         $result = "";

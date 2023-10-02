@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\Filesystem;
@@ -30,7 +28,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
     /**
      * @var array
      */
-    public array $results = [];
+    public $results = [];
     /**
      * @var Filesystem
      */
@@ -66,7 +64,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      * @param mixed $refundInfo
      * @return array
      */
-    public function import(string $orderId, mixed $refundInfo): array
+    public function import($orderId, $refundInfo)
     {
         // response messages
         $this->results["response"]["data"]["success"] = [];
@@ -131,7 +129,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      * @param array $refundInfo
      * @return bool
      */
-    public function importIoRefund(string $orderId, array $refundInfo): bool
+    public function importIoRefund($orderId, $refundInfo)
     {
         try {
             $order = $this->orderFactory->create()
@@ -225,9 +223,9 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      * @return bool
      */
     public function createCreditMemo(
-        \Magento\Sales\Model\Order $order,
-        array $refundInfo
-    ): bool {
+        $order,
+        $refundInfo
+    ) {
         $orderIId = $order->getIncrementId();
         $shippingRefundedTotal = 0;
         $shippingTaxRefundedTotal = 0;
@@ -309,7 +307,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      *
      * @return void
      */
-    public function cleanResponseMessages(): void
+    public function cleanResponseMessages()
     {
         if (count($this->results["response"])) {
             foreach ($this->results["response"] as $key => $value) {
@@ -343,7 +341,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
      * @param string $message
      * @return void
      */
-    public function log(string $message): void
+    public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
         $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);

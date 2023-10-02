@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Api;
 
 interface RefundImportInterface
@@ -25,7 +23,7 @@ interface RefundImportInterface
      * @return array
      */
     public function import(
-        string $orderId,
-        mixed $refundInfo
-    ): array;
+        $orderId,
+        $refundInfo
+    );
 }

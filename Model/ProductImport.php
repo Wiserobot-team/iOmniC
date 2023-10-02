@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
@@ -301,13 +299,13 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @return array
      */
     public function import(
-        int $store,
-        array $attributeInfo,
-        array $variationInfo,
-        array $groupedInfo = [],
-        array $stockInfo = [],
-        array $imageInfo = []
-    ): array {
+        $store,
+        $attributeInfo,
+        $variationInfo,
+        $groupedInfo = [],
+        $stockInfo = [],
+        $imageInfo = []
+    ) {
         // response messages
         $this->results["response"]["data"]["success"] = [];
         $this->results["response"]["data"]["error"] = [];
@@ -526,10 +524,10 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @return bool
      */
     public function importData(
-        \Magento\Catalog\Model\Product $product,
-        array $productData,
-        int $storeId
-    ): bool {
+        $product,
+        $productData,
+        $storeId
+    ) {
         $sku = $product->getSku();
         try {
             $importedAttributes = [];
@@ -1097,9 +1095,9 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @return void
      */
     public function setCategories(
-        \Magento\Catalog\Model\Product $product,
-        array $categoryIds
-    ): void {
+        $product,
+        $categoryIds
+    ) {
         $sku = $product->getSku();
         $productId = $product->getId();
         $categoryIds = array_unique($categoryIds);
@@ -1130,14 +1128,14 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @return array
      */
     public function getDataToImport(
-        array $attributeInfo,
-        \Magento\Catalog\Model\Product $product,
-        array $variationInfo,
-        array $groupedInfo,
-        array $stockInfo,
-        array $imageInfo,
-        int $storeId
-    ): array {
+        $attributeInfo,
+        $product,
+        $variationInfo,
+        $groupedInfo,
+        $stockInfo,
+        $imageInfo,
+        $storeId
+    ) {
         $result = [];
         $result['attributes'] = []; // for product fields
         $result['category_ids'] = []; // for category ids
@@ -1282,9 +1280,9 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @return int
      */
     public function importImages(
-        \Magento\Catalog\Model\Product $product,
-        array $imageList
-    ): mixed {
+        $product,
+        $imageList
+    ) {
         if (!$product || !$product->getId()) {
             return 0;
         }
@@ -1302,7 +1300,7 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @param string $attrCode
      * @return mixed
      */
-    public function getAttribute(string $attrCode): mixed
+    public function getAttribute($attrCode)
     {
         return $this->productAttributeHelper->getAttribute($attrCode);
     }
@@ -1314,7 +1312,7 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @param string $attrOptionLabel
      * @return mixed
      */
-    public function getAttributeValue(string $attrCode, string $attrOptionLabel): mixed
+    public function getAttributeValue($attrCode, $attrOptionLabel)
     {
         $attrValue = $this->productAttributeHelper->getAttributeOptionValue($attrCode, $attrOptionLabel);
         if (!$attrValue) {
@@ -1333,7 +1331,7 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @param int $productId
      * @return bool
      */
-    public function updateAtProductAfterSaveAttribute(int $productId): bool
+    public function updateAtProductAfterSaveAttribute($productId)
     {
         $attributeCode = 'updated_at';
         $attribute = $this->entityAttributeFactory->create()
@@ -1367,7 +1365,7 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      *
      * @return void
      */
-    public function cleanResponseMessages(): void
+    public function cleanResponseMessages()
     {
         if (count($this->results["response"])) {
             foreach ($this->results["response"] as $key => $value) {
@@ -1401,7 +1399,7 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
      * @param string $message
      * @return void
      */
-    public function log(string $message): void
+    public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
         $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);

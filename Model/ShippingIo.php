@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
@@ -46,7 +44,7 @@ class ShippingIo implements \WiseRobot\Io\Api\ShippingIoInterface
      *
      * @return array
      */
-    public function getList(): array
+    public function getList()
     {
         $shipMethods = [];
         $activeCarriers = $this->shippingConfig->getActiveCarriers();

@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Helper;
 
 use Magento\Catalog\Api\ProductAttributeRepositoryInterface;
@@ -28,11 +26,11 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * @var array
      */
-    public array $attributes = [];
+    public $attributes = [];
     /**
      * @var mixed
      */
-    public mixed $productAttribute = [];
+    public $productAttribute = [];
     /**
      * @var ProductAttributeRepositoryInterface
      */
@@ -96,7 +94,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $optionLabel
      * @return mixed
      */
-    public function getAttributeOptionValue(string $attributeCode, string $optionLabel): mixed
+    public function getAttributeOptionValue($attributeCode, $optionLabel)
     {
         $optionLabel = trim((string) $optionLabel);
         if (!$optionLabel) {
@@ -148,7 +146,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $attributeCode
      * @return void
      */
-    public function getAttributeData(string $attributeCode): void
+    public function getAttributeData($attributeCode)
     {
         if (!isset($this->attributes[$attributeCode])) {
             $this->attributes[$attributeCode] = [];
@@ -178,7 +176,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $attributeCode
      * @return mixed
      */
-    public function getAttribute(string $attributeCode): mixed
+    public function getAttribute($attributeCode)
     {
         $this->getAttributeData($attributeCode);
         if (isset($this->attributes[$attributeCode]['attribute'])) {
@@ -196,7 +194,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * @param mixed $optionId
      * @return void
      */
-    public function addAttributeOptionSwatch(mixed $attribute, mixed $optionId): void
+    public function addAttributeOptionSwatch($attribute, $optionId)
     {
         // check if attribute is swatch visual
         $isSwatch = $this->swatchesHelper->isSwatchAttribute($attribute);
@@ -215,7 +213,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * @param int $storeId
      * @return mixed
      */
-    public function loadSwatchIfExists(mixed $optionId, int $storeId = 0): mixed
+    public function loadSwatchIfExists($optionId, $storeId = 0)
     {
         $collection = $this->swatchCollectionFactory->create();
         $collection->addFieldToFilter('option_id', $optionId);
@@ -236,11 +234,11 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * @return void
      */
     public function saveSwatchData(
-        mixed $optionId,
-        int $storeId = 0,
-        int $type = 3,
-        string $value = ''
-    ): void {
+        $optionId,
+        $storeId = 0,
+        $type = 3,
+        $value = ''
+    ) {
         $swatch = $this->loadSwatchIfExists($optionId, 0);
         if (!$swatch->getId()) {
             $swatch->setData('option_id', $optionId);
@@ -261,7 +259,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $message
      * @return void
      */
-    public function log(string $message): void
+    public function log($message)
     {
         if ($this->productAttribute) {
             $this->productAttribute->log($message);

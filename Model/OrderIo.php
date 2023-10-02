@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
@@ -29,7 +27,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     /**
      * @var array
      */
-    public array $results = [];
+    public $results = [];
     /**
      * @var ScopeConfigInterface
      */
@@ -96,11 +94,11 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getList(
-        int $store,
-        string $filter = "",
-        int $page = 1,
-        int $limit = 50
-    ): array {
+        $store,
+        $filter = "",
+        $page = 1,
+        $limit = 50
+    ) {
         // create order collection
         $orderCollection = $this->orderCollectionFactory->create();
         $errorMess = "data request error";
@@ -239,7 +237,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @param string $string
      * @return string
      */
-    public function processFilter(string $string): string
+    public function processFilter($string)
     {
         switch ($string) {
             case strpos((string) $string, " eq ") == true:
@@ -265,8 +263,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getOrderInfo(
-        \Magento\Sales\Model\Order $order
-    ): array {
+        $order
+    ) {
         return [
             "order_id" => $order->getIncrementId(),
             "io_order_id" => $order->getData('io_order_id'),
@@ -385,8 +383,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getPaymentInfo(
-        \Magento\Sales\Model\Order $order
-    ): array {
+        $order
+    ) {
         $payment = $order->getPayment();
         $magePaymentMethods = $this->getMagentoPaymentMethods();
         if (!isset($magePaymentMethods[$payment->getData("method")])) {
@@ -410,7 +408,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      *
      * @return array
      */
-    public function getMagentoPaymentMethods(): array
+    public function getMagentoPaymentMethods()
     {
         $paymentMethods = [];
         $activePayments = $this->paymentConfig->getActiveMethods();
@@ -434,8 +432,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getShippingInfo(
-        \Magento\Sales\Model\Order $order
-    ): array {
+        $order
+    ) {
         $shippingAddress = !$order->getIsVirtual() ? $order->getShippingAddress() : null;
         $billingAddress = $order->getBillingAddress();
         if (!$shippingAddress) {
@@ -481,8 +479,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getShipmentInfo(
-        \Magento\Sales\Model\Order $order
-    ): array {
+        $order
+    ) {
         $shipmentInfo = [];
         $shipments = $order->getShipmentsCollection();
         foreach ($shipments as $shipment) {
@@ -531,8 +529,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getRefundInfo(
-        \Magento\Sales\Model\Order $order
-    ): array {
+        $order
+    ) {
         $refundInfo = [];
         $refunds = $order->getCreditmemosCollection();
         foreach ($refunds as $refund) {
@@ -599,8 +597,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getBillingInfo(
-        \Magento\Sales\Model\Order $order
-    ): array {
+        $order
+    ) {
         return [
             "firstname" => $this->formatText(
                 (string) $order->getBillingAddress()->getData("firstname")
@@ -638,8 +636,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getStatusHistories(
-        \Magento\Sales\Model\Order $order
-    ): array {
+        $order
+    ) {
         $histories = [];
         $statusHistories = $order->getStatusHistories();
         if (count($statusHistories)) {
@@ -663,8 +661,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return array
      */
     public function getItemInfo(
-        \Magento\Sales\Model\Order\Item $item
-    ): array {
+        $item
+    ) {
         return [
             "sku" => $this->getItemSku($item),
             "name" => $this->formatText((string) $item->getName()),
@@ -704,7 +702,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @param string $string
      * @return string
      */
-    public function formatText(string $string): string
+    public function formatText($string)
     {
         $string = str_replace(',', ' ', (string) $string);
 
@@ -718,8 +716,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return string
      */
     public function getInvoiceDate(
-        \Magento\Sales\Model\Order $order
-    ): string {
+        $order
+    ) {
         $date = '';
         $collection = $order->getInvoiceCollection();
         if (count($collection)) {
@@ -738,8 +736,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return string
      */
     public function getShipmentDate(
-        \Magento\Sales\Model\Order $order
-    ): string {
+        $order
+    ) {
         $date = '';
         $collection = $order->getShipmentsCollection();
         if (count($collection)) {
@@ -758,8 +756,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return string
      */
     public function getCreditMemoDate(
-        \Magento\Sales\Model\Order $order
-    ): string {
+        $order
+    ) {
         $date = '';
         $collection = $order->getCreditmemosCollection();
         if (count($collection)) {
@@ -778,8 +776,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return string
      */
     public function getItemSku(
-        \Magento\Sales\Model\Order\Item $item
-    ): string {
+        $item
+    ) {
         if ($item->getProductType() == 'configurable') {
             return (string) $item->getProductOptionByCode('simple_sku');
         }
@@ -794,8 +792,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @return string
      */
     public function getChildInfo(
-        \Magento\Sales\Model\Order\Item $item
-    ): string {
+        $item
+    ) {
         if ($item->getParentItemId()) {
             return 'yes';
         } else {

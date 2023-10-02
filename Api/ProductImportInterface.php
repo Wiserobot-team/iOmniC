@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Api;
 
 interface ProductImportInterface
@@ -29,11 +27,11 @@ interface ProductImportInterface
      * @return array
      */
     public function import(
-        int $store,
-        array $attributeInfo,
-        array $variationInfo,
-        array $groupedInfo = [],
-        array $stockInfo = [],
-        array $imageInfo = []
-    ): array;
+        $store,
+        $attributeInfo,
+        $variationInfo,
+        $groupedInfo = [],
+        $stockInfo = [],
+        $imageInfo = []
+    );
 }

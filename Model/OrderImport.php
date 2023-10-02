@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Model;
 
 use Magento\Framework\App\Config\ScopeConfigInterface;
@@ -53,7 +51,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
     /**
      * @var array
      */
-    public array $results = [];
+    public $results = [];
     /**
      * @var ScopeConfigInterface
      */
@@ -258,16 +256,16 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @return array
      */
     public function import(
-        int $store,
-        array $orderInfo,
-        array $paymentInfo,
-        array $shippingInfo,
-        array $billingInfo,
-        mixed $itemInfo,
-        mixed $statusHistories = [],
-        mixed $shipmentInfo = [],
-        mixed $refundInfo = []
-    ): array {
+        $store,
+        $orderInfo,
+        $paymentInfo,
+        $shippingInfo,
+        $billingInfo,
+        $itemInfo,
+        $statusHistories = [],
+        $shipmentInfo = [],
+        $refundInfo = []
+    ) {
         // response messages
         $this->results["response"]["data"]["success"] = [];
         $this->results["response"]["data"]["error"] = [];
@@ -452,16 +450,16 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @return mixed
      */
     public function importIoOrder(
-        array $orderInfo,
-        array $paymentInfo,
-        array $shippingInfo,
-        array $billingInfo,
-        array $statusHistories,
-        array $shipmentInfo,
-        array $refundInfo,
-        array $itemInfo,
-        mixed $store
-    ): bool {
+        $orderInfo,
+        $paymentInfo,
+        $shippingInfo,
+        $billingInfo,
+        $statusHistories,
+        $shipmentInfo,
+        $refundInfo,
+        $itemInfo,
+        $store
+    ) {
         $storeId = (int) $store->getId();
         $ioOrderId = $orderInfo["io_order_id"];
         $caOrderId = $orderInfo["ca_order_id"];
@@ -974,10 +972,10 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @return mixed
      */
     public function getShippingAddress(
-        array $shippingInfo,
-        int $storeId,
-        int $create = 1
-    ): mixed {
+        $shippingInfo,
+        $storeId,
+        $create = 1
+    ) {
         $countryCode = $shippingInfo["country_id"];
         if ($shippingInfo["country_id"] == "PR") {
             $countryCode = "US";
@@ -1041,11 +1039,11 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @return mixed
      */
     public function getBillingAddress(
-        array $billingInfo,
-        array $shippingInfo,
-        int $storeId,
-        int $create = 1
-    ): mixed {
+        $billingInfo,
+        $shippingInfo,
+        $storeId,
+        $create = 1
+    ) {
         if ((!$billingInfo["country_id"]) || ($billingInfo["country_id"] == "  ")) {
             $countryCode = $shippingInfo["country_id"];
             if ($countryCode == "PR") {
@@ -1170,7 +1168,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @param array $data
      * @return array
      */
-    public function fixAddressData(array $data): array
+    public function fixAddressData($data)
     {
         $regionCode = "";
         if ($data['country_id'] == "HR" && !$data['region_id']) {
@@ -1227,9 +1225,9 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @return \Magento\Sales\Model\Order\Item
      */
     public function getOrderItem(
-        array $item,
-        int $storeId
-    ): \Magento\Sales\Model\Order\Item {
+        $item,
+        $storeId
+    ) {
         $orderItem = $this->orderItemFactory->create();
         $sku       = $item["sku"];
         $productId = $this->productFactory->create()
@@ -1295,9 +1293,9 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @return \Magento\Sales\Model\Order\Item
      */
     public function updateOrderItemCalculation(
-        \Magento\Sales\Model\Order\Item $mageOrderItem,
-        \Magento\Sales\Model\Order\Item $orderItem
-    ): \Magento\Sales\Model\Order\Item {
+        $mageOrderItem,
+        $orderItem
+    ) {
         $mageOrderItem->setData("product_type", "simple");
         $mageOrderItem->setData("store_id", $orderItem->getData("store_id"));
         $mageOrderItem->setData("is_virtual", 0);
@@ -1343,7 +1341,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @param int $storeId
      * @return int
      */
-    public function isSkuInOrderMissing(array $ioOrderItems, int $storeId): int
+    public function isSkuInOrderMissing($ioOrderItems, $storeId)
     {
         foreach ($ioOrderItems as $orderItem) {
             $sku = $orderItem["sku"];
@@ -1363,7 +1361,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @param array $paymentInfo
      * @return \Magento\Sales\Model\Order\Payment
      */
-    public function getPaymentInfo(array $paymentInfo): \Magento\Sales\Model\Order\Payment
+    public function getPaymentInfo($paymentInfo)
     {
         $magePaymentMethods = $this->getMagentoPaymentMethods();
         $defaultPaymentMethod = key($magePaymentMethods);
@@ -1384,7 +1382,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      *
      * @return array
      */
-    public function getMagentoShippingMethods(): array
+    public function getMagentoShippingMethods()
     {
         $shipMethods = [];
         $activeCarriers = $this->shippingConfig->getActiveCarriers();
@@ -1415,7 +1413,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      *
      * @return array
      */
-    public function getAllMagentoShippingMethods(): array
+    public function getAllMagentoShippingMethods()
     {
         $shipMethods = [];
         $activeCarriers = $this->shippingConfig->getAllCarriers();
@@ -1446,7 +1444,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      *
      * @return array
      */
-    public function getMagentoPaymentMethods(): array
+    public function getMagentoPaymentMethods()
     {
         $paymentMethods = [];
         $activePayments = $this->paymentConfig->getActiveMethods();
@@ -1469,7 +1467,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @param \Magento\Sales\Model\Order $order
      * @return void
      */
-    public function createInvoice(\Magento\Sales\Model\Order $order): void
+    public function createInvoice($order)
     {
         if ($order->canInvoice()) {
             try {
@@ -1519,10 +1517,10 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @return bool
      */
     public function createShipment(
-        \Magento\Sales\Model\Order $order,
-        array $ioOrderInfo,
-        array $shipmentInfo
-    ): bool {
+        $order,
+        $ioOrderInfo,
+        $shipmentInfo
+    ) {
         if ($order->hasShipments()) {
             $message = "Skip order <" . $order->getIncrementId() . "> for already has shipment";
             $this->results["response"]["data"]["success"][] = $message;
@@ -1632,7 +1630,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @param array $refundInfo
      * @return bool
      */
-    public function createCreditMemo(string $orderIncrementID, array $refundInfo): mixed
+    public function createCreditMemo($orderIncrementID, $refundInfo)
     {
         $orderObject = $this->orderFactory->create()
             ->loadByIncrementId($orderIncrementID);
@@ -1735,7 +1733,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      *
      * @return void
      */
-    public function cleanResponseMessages(): void
+    public function cleanResponseMessages()
     {
         if (count($this->results["response"])) {
             foreach ($this->results["response"] as $key => $value) {
@@ -1769,7 +1767,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      * @param string $message
      * @return void
      */
-    public function log(string $message): void
+    public function log($message)
     {
         $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
         $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);

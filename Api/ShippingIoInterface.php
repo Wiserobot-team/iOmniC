@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Api;
 
 interface ShippingIoInterface
@@ -22,5 +20,5 @@ interface ShippingIoInterface
      *
      * @return array
      */
-    public function getList(): array;
+    public function getList();
 }

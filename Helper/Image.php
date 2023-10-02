@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Helper;
 
 use Magento\Framework\Filesystem;
@@ -27,7 +25,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * @var array
      */
-    public array $currentPlacements = [];
+    public $currentPlacements = [];
     /**
      * @var Filesystem
      */
@@ -79,10 +77,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @return int
      */
     public function populateProductImage(
-        \Magento\Catalog\Model\Product $product,
-        array $imagePlacementsToSet,
-        \WiseRobot\Io\Model\ProductImport $importModel
-    ): int {
+        $product,
+        $imagePlacementsToSet,
+        $importModel
+    ) {
         $totalImagesAdded = 0;
         if (!$product || !$product->getId()) {
             return $totalImagesAdded;
@@ -179,12 +177,12 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @return int
      */
     public function addImageToProductGallery(
-        \Magento\Catalog\Model\Product &$product,
-        string $imageUrl,
-        bool $isMainImage,
-        int $position,
-        \WiseRobot\Io\Model\ProductImport $importModel
-    ): int {
+        &$product,
+        $imageUrl,
+        $isMainImage,
+        $position,
+        $importModel
+    ) {
         $sku = $product->getSku();
         $productId = $product->getId();
         $dir = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
@@ -263,10 +261,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @return void
      */
     public function removeImage(
-        \Magento\Catalog\Model\Product &$product,
-        int $position,
-        \WiseRobot\Io\Model\ProductImport $importModel
-    ): void {
+        &$product,
+        $position,
+        $importModel
+    ) {
         $sku = $product->getSku();
         $productId = $product->getId();
         try {
@@ -304,7 +302,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $sku
      * @return array
      */
-    public function getProductImageImportUrl(string $sku): array
+    public function getProductImageImportUrl($sku)
     {
         $imageList = [];
         $imageCollection = $this->productImageFactory->create()
@@ -327,7 +325,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @param array $imageList
      * @return void
      */
-    public function saveProductImageImportUrl(string $sku, array $imageList): void
+    public function saveProductImageImportUrl($sku, $imageList)
     {
         $oldList = $this->getProductImageImportUrl($sku);
         $currentImagePlacements = $this->currentPlacements;
@@ -364,9 +362,9 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @return void
      */
     public function deleteProductImage(
-        string $path,
-        \WiseRobot\Io\Model\ProductImport $importModel
-    ): void {
+        $path,
+        $importModel
+    ) {
         $imagePath = 'catalog/product/' . trim((string) $path, ' /');
         $filePath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
                 ->getAbsolutePath('') . $imagePath;
@@ -386,7 +384,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $sku
      * @return void
      */
-    public function deleteStoredProductImages(string $sku): void
+    public function deleteStoredProductImages($sku)
     {
         $ioProductImages = $this->productImageFactory->create()
             ->getCollection()

@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Helper;
 
 use Magento\Catalog\Api\ProductRepositoryInterface;
@@ -40,9 +38,9 @@ class Sku extends \Magento\Framework\App\Helper\AbstractHelper
      * @return false|\Magento\Catalog\Api\Data\ProductInterface
      */
     public function loadBySku(
-        string $sku,
-        int $storeId = 0
-    ): false|\Magento\Catalog\Api\Data\ProductInterface {
+        $sku,
+        $storeId = 0
+    ) {
         try {
             if ($storeId) {
                 $product = $this->productRepository->get($sku, false, $storeId);

@@ -11,8 +11,6 @@
  * License http://wiserobot.com/mage_extension_license.pdf
  */
 
-declare(strict_types=1);
-
 namespace WiseRobot\Io\Helper;
 
 use Magento\Store\Model\StoreManagerInterface;
@@ -23,7 +21,7 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * @var mixed
      */
-    public mixed $logModel = null;
+    public $logModel = null;
     /**
      * @var StoreManagerInterface
      */
@@ -54,10 +52,10 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @return array
      */
     public function processCategoryTree(
-        string $tree,
-        int $storeId,
-        bool $allowCreateCat
-    ): array {
+        $tree,
+        $storeId,
+        $allowCreateCat
+    ) {
         // paths are split by :: or :
         $paths = preg_split("/(::|:|,)/", $tree);
         $result = [];
@@ -82,10 +80,10 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @return array
      */
     public function processCategoryPath(
-        string $path,
-        int $storeId,
-        bool $allowCreate = false
-    ): array {
+        $path,
+        $storeId,
+        $allowCreate = false
+    ) {
         // name is split by / or > or \
         $categoryLevels = preg_split("/(\/|>|\\\)/", (string) $path);
         $store = $this->storeManager->getStore()->load($storeId);
@@ -119,10 +117,10 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @return mixed
      */
     public function createOrSearchCategory(
-        string $nameToCreate,
-        int $parentId,
-        bool $allowCreate = false
-    ): mixed {
+        $nameToCreate,
+        $parentId,
+        $allowCreate = false
+    ) {
         $existingId = $this->searchCategoryId($nameToCreate, $parentId);
         if (!$existingId && $allowCreate) {
             $newCategory = $this->categoryFactory->create();
@@ -161,9 +159,9 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @return mixed
      */
     public function searchCategoryId(
-        string $categoryName,
-        int $parentId
-    ): mixed {
+        $categoryName,
+        $parentId
+    ) {
         $foundId = false;
         $collection = $this->categoryFactory->create()
             ->getCollection()
@@ -185,7 +183,7 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $message
      * @return void
      */
-    public function log(string $message): void
+    public function log(string $message)
     {
         if ($this->logModel !== null) {
             $this->logModel->log($message);
