@@ -51,6 +51,10 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
      */
     public $logFile = "wr_io_order_import.log";
     /**
+     * @var bool
+     */
+    public $isTaxInclusive = false;
+    /**
      * @var array
      */
     public array $results = [];
@@ -322,12 +326,13 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
             || !isset($orderInfo["checkout_status"]) || !$orderInfo["checkout_status"]
             || !isset($orderInfo["shipping_status"]) || !$orderInfo["shipping_status"]
             || !isset($orderInfo["refund_status"]) || !$orderInfo["refund_status"]
-            || !isset($orderInfo["grand_total"]) || !isset($orderInfo["tax_amount"])
+            || !isset($orderInfo["grand_total"]) || !isset($orderInfo["order_tax_type"])
+            || !isset($orderInfo["tax_amount"]) || !isset($orderInfo["shipping_tax_type"])
             || !isset($orderInfo["shipping_amount"]) || !isset($orderInfo["shipping_tax_amount"])
             || !isset($orderInfo["discount_amount"])) {
             $message = "Field: 'order_info' - {'order_time_gmt', 'email', 'item_sale_source', 'grand_total'
-            , 'tax_amount', 'shipping_amount', 'shipping_tax_amount', 'discount_amount'
-            , 'checkout_status', 'shipping_status', 'refund_status'} data fields are required";
+            , 'order_tax_type', 'tax_amount','shipping_tax_type', 'shipping_amount', 'shipping_tax_amount'
+            , 'discount_amount', 'checkout_status', 'shipping_status', 'refund_status'} data fields are required";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();
@@ -467,6 +472,11 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
         $caOrderId = $orderInfo["ca_order_id"];
         $buyerUserID = "";
         $itemSaleSource = $orderInfo["item_sale_source"];
+
+        $this->isTaxInclusive = false;
+        if ((int) $orderInfo["order_tax_type"]) {
+            $this->isTaxInclusive = true;
+        }
 
         try {
             // order items
@@ -850,13 +860,18 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
                 $newOrder->setData("tax_amount", $orderInfo["tax_amount"]);
                 $newOrder->setData("base_tax_amount", $orderInfo["tax_amount"]);
 
-                $currencyCode = $store->getCurrentCurrencyCode();
+                if ((int) $orderInfo["shipping_tax_type"]) {
+                    $shippingCost = (float) $orderInfo["shipping_amount"] - $orderInfo["shipping_tax_amount"];
+                } else {
+                    $shippingCost = (float) $orderInfo["shipping_amount"];
+                }
 
-                $newOrder->setData("base_shipping_amount", $orderInfo["shipping_amount"]);
-                $newOrder->setData("shipping_amount", $orderInfo["shipping_amount"]);
+                $newOrder->setData("base_shipping_amount", $shippingCost);
+                $newOrder->setData("shipping_amount", $shippingCost);
                 $newOrder->setData("shipping_tax_amount", $orderInfo["shipping_tax_amount"]);
                 $newOrder->setData("base_shipping_tax_amount", $orderInfo["shipping_tax_amount"]);
 
+                $currencyCode = $store->getCurrentCurrencyCode();
                 $newOrder->setData('base_currency_code', $currencyCode);
                 $newOrder->setData('store_currency_code', $currencyCode);
                 $newOrder->setData('order_currency_code', $currencyCode);
@@ -1257,10 +1272,17 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
         $orderItem->setData("site_order_item_id", $item["id"]);
 
         $itemPrice = (float) $item["price"];
-        $rowTax = (float) $item["tax_amount"];
-        $itemTax = $rowTax / (int) $item["qty"];
-        $itemPrice = (float) $item["price"] - $itemTax;
-        $priceInclTax = (float) $item["price"];
+        if ($this->isTaxInclusive) {
+            $rowTax = (float) $item["tax_amount"];
+            $itemTax = $rowTax / (int) $item["qty"];
+            $itemPrice = (float) $item["price"] - $itemTax;
+            $priceInclTax = (float) $item["price"];
+        } else {
+            $rowTax = (float) $item["tax_amount"];
+            $itemTax = $rowTax / (int) $item["qty"];
+            $itemPrice = (float) $item["price"];
+            $priceInclTax = (float) $item["price"] + $itemTax;
+        }
 
         $rowTotal = $itemPrice * (int) $item["qty"];
         $rowTotalInclTax = $priceInclTax * (int) $item["qty"];

@@ -60,7 +60,7 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
     /**
      * @var array
      */
-    public $results = [];
+    public array $results = [];
     /**
      * @var ScopeConfigInterface
      */
