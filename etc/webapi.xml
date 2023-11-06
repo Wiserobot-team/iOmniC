@@ -52,6 +52,12 @@
             <resource ref="self"/>
         </resources>
     </route>
+    <route url="/V1/io/shipping-carriers" method="GET">
+        <service class="WiseRobot\Io\Api\CarrierIoInterface" method="getList" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
     <route url="/V1/io/shipments/import" method="POST">
         <service class="WiseRobot\Io\Api\ShipmentImportInterface" method="import" />
         <resources>
