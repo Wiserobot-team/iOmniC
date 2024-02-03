@@ -326,12 +326,12 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
             || !isset($orderInfo["checkout_status"]) || !$orderInfo["checkout_status"]
             || !isset($orderInfo["shipping_status"]) || !$orderInfo["shipping_status"]
             || !isset($orderInfo["refund_status"]) || !$orderInfo["refund_status"]
-            || !isset($orderInfo["grand_total"]) || !isset($orderInfo["order_tax_type"])
-            || !isset($orderInfo["tax_amount"]) || !isset($orderInfo["shipping_tax_type"])
-            || !isset($orderInfo["shipping_amount"]) || !isset($orderInfo["shipping_tax_amount"])
-            || !isset($orderInfo["discount_amount"])) {
-            $message = "Field: 'order_info' - {'order_time_gmt', 'email', 'item_sale_source', 'grand_total'
-            , 'order_tax_type', 'tax_amount','shipping_tax_type', 'shipping_amount', 'shipping_tax_amount'
+            || !isset($orderInfo["order_increment_id"]) || !isset($orderInfo["grand_total"])
+            || !isset($orderInfo["order_tax_type"]) || !isset($orderInfo["tax_amount"])
+            || !isset($orderInfo["shipping_tax_type"]) || !isset($orderInfo["shipping_amount"])
+            || !isset($orderInfo["shipping_tax_amount"]) || !isset($orderInfo["discount_amount"])) {
+            $message = "Field: 'order_info' - {'order_increment_id', order_time_gmt', 'email', 'item_sale_source'
+            , 'grand_total' , 'order_tax_type', 'tax_amount','shipping_tax_type', 'shipping_amount', 'shipping_tax_amount'
             , 'discount_amount', 'checkout_status', 'shipping_status', 'refund_status'} data fields are required";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
@@ -795,6 +795,15 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
                     $cart->collectTotals();
                     $cart->save();
                     $cart = $this->cartRepositoryInterface->get($cart->getId());
+                    // set prefix
+                    if (trim((string) $orderInfo["order_increment_id"]) != "") {
+                        $reserveOrderId = $cart->reserveOrderId();
+                        $newIncrementId = $reserveOrderId->getReservedOrderId();
+                        if ($newIncrementId != trim((string) $orderInfo["order_increment_id"])) {
+                            $newIncrementId = trim((string) $orderInfo["order_increment_id"]);
+                            $reserveOrderId->setReservedOrderId($newIncrementId);
+                        }
+                    }
                     $orderID = $this->cartManagementInterface->placeOrder($cart->getId());
                     $newOrder = $this->orderFactory->create()->load($orderID);
                 }
@@ -928,6 +937,17 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
 
             // save order
             $savedOrder = $newOrder->save();
+
+            if (!$isOldOrder && $skuIsMissing) {
+                // set prefix
+                if (trim((string) $orderInfo["order_increment_id"]) != "") {
+                    $newIncrementId = $savedOrder->getIncrementId();
+                    if ($newIncrementId != trim((string) $orderInfo["order_increment_id"])) {
+                        $newIncrementId = trim((string) $orderInfo["order_increment_id"]);
+                        $savedOrder = $newOrder->setIncrementId($newIncrementId)->save();
+                    }
+                }
+            }
 
             // save order id, io order id, marketplace
             $oldIoOrder->setData("order_increment_id", $newOrder->getIncrementId());
