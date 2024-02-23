@@ -1519,27 +1519,31 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
                 $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
                 $invoice->register();
 
-                $transactionSave = $this->transaction
-                    ->addObject($invoice)
+                $transactionSave = $this->transaction->addObject($invoice)
                     ->addObject($invoice->getOrder());
                 $transactionSave->save();
+
                 $order->setData("base_total_invoiced", $order->getData("base_grand_total"));
                 $order->setData("total_invoiced", $order->getData("grand_total"));
-
+                $order->setData("base_total_paid", $order->getData("base_grand_total"));
                 $order->setData("total_paid", $order->getData("grand_total"));
-                $order->setData("base_total_paid", $order->getData("grand_total"));
                 $order->save();
+
                 $payment = $order->getPayment();
                 if ($payment->getId()) {
-                    $payment->setData("base_amount_paid", $order->getData("grand_total"));
+                    $payment->setData("base_shipping_amount", $order->getData("base_shipping_amount"));
+                    $payment->setData("shipping_amount", $order->getData("shipping_amount"));
+                    $payment->setData("base_amount_ordered", $order->getData("base_grand_total"));
+                    $payment->setData("amount_ordered", $order->getData("grand_total"));
+                    $payment->setData("base_amount_paid", $order->getData("base_grand_total"));
                     $payment->setData("amount_paid", $order->getData("grand_total"));
                     $payment->save();
                 }
+
                 $invoice->setData("base_grand_total", $order->getData("base_grand_total"));
                 $invoice->setData("grand_total", $order->getData("grand_total"));
-
-                $invoice->setData("discount_amount", $order->getData("discount_amount"));
                 $invoice->setData("base_discount_amount", $order->getData("base_discount_amount"));
+                $invoice->setData("discount_amount", $order->getData("discount_amount"));
                 $invoice->save();
             } catch (\Exception $e) {
                 $errorMes = "Error while create invoice " . $e->getMessage();
