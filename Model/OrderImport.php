@@ -905,6 +905,10 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
             $newOrder->setData("buyer_user_id", $buyerUserID);
             $newOrder->setData("io_marketplace", $itemSaleSource);
 
+            if (isset($orderInfo["rep_user_name"]) && trim((string) $orderInfo["rep_user_name"]) != "") {
+                $newOrder->setData("rep_user_name", trim((string) $orderInfo["rep_user_name"]));
+            }
+
             // add comment
             if (!$isOldOrder) {
                 $statusMessage  = "Marketplace: " . $itemSaleSource . ", ChannelAdvisor Order ID: " .
