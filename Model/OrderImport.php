@@ -679,6 +679,16 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
                     );
 
                     try {
+                        if ($product->getTypeId() == "bundle") {
+                            $params = [
+                                'product' => $product->getId(),
+                                'bundle_option' => $this->getBundleOptions($product),
+                                'qty' => (int) $webOrderItem['qty_ordered']
+                            ];
+                            $cart->addProduct($product, new \Magento\Framework\DataObject($params));
+                            continue;
+                        }
+
                         $item = $cart->addProduct($product, (int) $webOrderItem['qty_ordered']);
                         if (is_string($item)) {
                             $message = "Order " . $ioOrderId . " product '" . $product->getSku() . "': " . $item;
@@ -695,9 +705,6 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
                             );
                             return false;
                         }
-                        $item->setCustomPrice($webOrderItem['price']);
-                        $item->setOriginalCustomPrice($webOrderItem['price']);
-                        $item->setIsSuperMode(true);
                     } catch (\Exception $e) {
                         $message = "Order " . $ioOrderId . " product '" .
                             $product->getSku() . "': " . $e->getMessage();
@@ -818,7 +825,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
             }
 
             // update order items
-            if (!$isOldOrder && !$skuIsMissing) {
+            /*if (!$isOldOrder && !$skuIsMissing) {
                 foreach ($ioOrderItems as $orderItem) {
                     $webOrderItem = $this->getOrderItem($orderItem, $storeId);
                     $mageOrderItems = $newOrder->getItemsCollection();
@@ -833,7 +840,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
                         }
                     }
                 }
-            }
+            }*/
 
             // order status info
             if ($orderInfo["checkout_status"] == "canceled") {
@@ -905,10 +912,6 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
             $newOrder->setData("buyer_user_id", $buyerUserID);
             $newOrder->setData("io_marketplace", $itemSaleSource);
 
-            if (isset($orderInfo["rep_user_name"]) && trim((string) $orderInfo["rep_user_name"]) != "") {
-                $newOrder->setData("rep_user_name", trim((string) $orderInfo["rep_user_name"]));
-            }
-
             // add comment
             if (!$isOldOrder) {
                 $statusMessage  = "Marketplace: " . $itemSaleSource . ", ChannelAdvisor Order ID: " .
@@ -937,6 +940,10 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
                         $newOrder->addStatusHistoryComment($commentString);
                     }
                 }
+            }
+
+            if (isset($orderInfo["rep_user_name"]) && trim((string) $orderInfo["rep_user_name"]) != "") {
+                $newOrder->setData("rep_user_name", trim((string) $orderInfo["rep_user_name"]));
             }
 
             // save order
@@ -1270,7 +1277,7 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
         int $storeId
     ): \Magento\Sales\Model\Order\Item {
         $orderItem = $this->orderItemFactory->create();
-        $sku       = $item["sku"];
+        $sku = $item["sku"];
         $productId = $this->productFactory->create()
             ->setStoreId($storeId)
             ->getIdBySku($sku);
@@ -1401,6 +1408,31 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
         }
 
         return 0;
+    }
+
+    /**
+     * Get Product Bundle Options
+     *
+     * @param \Magento\Catalog\Api\Data\ProductInterface $product
+     * @return array
+     */
+    public function getBundleOptions(
+        \Magento\Catalog\Api\Data\ProductInterface $product
+    ): array {
+        $bundleOptions = [];
+        if (!$product || !$product->getId()) {
+            return $bundleOptions;
+        }
+        $selectionCollection = $product->getTypeInstance()
+            ->getSelectionsCollection(
+                $product->getTypeInstance()->getOptionsIds($product),
+                $product
+            );
+        foreach ($selectionCollection as $selection) {
+                $bundleOptions[$selection->getOptionId()][] = $selection->getSelectionId();
+        }
+
+        return $bundleOptions;
     }
 
     /**
