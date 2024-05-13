@@ -545,26 +545,23 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
                     if (in_array($attrCode, $this->ignoreAttributes)) {
                         continue;
                     }
-                    if (in_array($attrCode, ['attribute_set', 'visibility', 'tax_class', 'status'])) {
-                        continue;
-                    }
-
-                    // some case doesn't treat like select
-                    $attribute = $this->getAttribute($attrCode);
-                    if ($attribute && $attribute->getData("frontend_input") == "select") {
-                        $attrValue = $this->getAttributeValue($attrCode, $attrValue);
-                        if (!$attrValue) {
-                            // TODO: find way to set empty value for dropdown
-                            continue;
-                        }
-                    }
-
                     if ($attrCode == 'attribute_set') {
                         $attrCode = 'attribute_set_id';
                     }
                     if ($attrCode == 'tax_class') {
                         $attrCode = 'tax_class_id';
                     }
+
+                    if (!in_array($attrCode, ['attribute_set_id', 'visibility', 'tax_class_id', 'status'])) {
+                        // some case doesn't treat like select
+                        $attribute = $this->getAttribute($attrCode);
+                        if ($attribute && $attribute->getData("frontend_input") == "select" &&
+                            !$attrValue = $this->getAttributeValue($attrCode, $attrValue)) {
+                            // TODO: find way to set empty value for dropdown
+                            continue;
+                        }
+                    }
+
                     if ($product->getData($attrCode) != $attrValue) {
                         $product->setData($attrCode, $attrValue);
                         // use saveAttribute for existing product only
