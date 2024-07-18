@@ -355,13 +355,6 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
             $this->cleanResponseMessages();
             throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
-        if (!isset($attributeInfo["gtin"])) {
-            $message = "Field: 'attribute_info' - 'gtin' data is a required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
 
         // variation info
         if (!$variationInfo) {
@@ -425,11 +418,6 @@ class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
 
             $product->setData('sku', $sku);
             $defaultDataToImport['default']['sku'] = $sku;
-
-            /* code added by ktpl */
-            $product->setData('gtin', $attributeInfo["gtin"]);
-            $defaultDataToImport['default']['gtin'] = $attributeInfo["gtin"];
-            /* code added by ktpl */
 
             if ($attributeSetId) {
                 $product->setData('attribute_set_id', $attributeSetId);
