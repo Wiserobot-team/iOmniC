@@ -87,33 +87,16 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         if (!$product || !$product->getId()) {
             return $totalImagesAdded;
         }
-
         $sku = $product->getSku();
         $productId = $product->getId();
-
-        $this->currentPlacements = [
-            [
-                'name' => "ITEMIMAGEURL1",
-                'image_placement_order' => 1
-            ],
-            [
-                'name' => "ITEMIMAGEURL2",
-                'image_placement_order' => 2
-            ],
-            [
-                'name' => "ITEMIMAGEURL3",
-                'image_placement_order' => 3
-            ],
-            [
-                'name' => "ITEMIMAGEURL4",
-                'image_placement_order' => 4
-            ],
-            [
-                'name' => "ITEMIMAGEURL5",
-                'image_placement_order' => 5
-            ]
-        ];
-
+        $this->currentPlacements = [];
+        $numberOfImagePlacements = count($imagePlacementsToSet) ? count($imagePlacementsToSet) : 10;
+        for ($i = 1; $i <= $numberOfImagePlacements; $i++) {
+            $this->currentPlacements[] = [
+                'name' => "ITEMIMAGEURL" . $i,
+                'image_placement_order' => $i
+            ];
+        }
         $currentImagePlacements = $this->currentPlacements;
         $oldImages = $this->getProductImageImportUrl($sku);
 
