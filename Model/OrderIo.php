@@ -294,6 +294,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             // order
             "created_at" => $order->getData('created_at'),
             "updated_at" => $order->getData('updated_at'),
+            "store_id" => $order->getData('store_id'),
+            "entity_id" => $order->getData('entity_id'),
             "invoice_created_at" => $this->getInvoiceDate($order),
             "shipment_created_at" => $this->getShipmentDate($order),
             "creditmemo_created_at" => $this->getCreditMemoDate($order),
@@ -514,6 +516,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             $shipmentInfo[] = [
                 "created_at" => $shipment->getData("created_at"),
                 "updated_at" => $shipment->getData("updated_at"),
+                "store_id" => $shipment->getData("store_id"),
+                "entity_id" => $shipment->getData("entity_id"),
+                "increment_id" => $shipment->getData("increment_id"),
+                "order_id" => $shipment->getData("order_id"),
                 "total_qty" => $shipment->getData("total_qty"),
                 "total_weight" => $shipment->getData("total_weight"),
                 "item_info" => $itemsData,
