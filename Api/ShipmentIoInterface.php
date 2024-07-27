@@ -30,6 +30,6 @@ interface ShipmentIoInterface
         int $store,
         string $filter = "",
         int $page = 1,
-        int $limit = 50
+        int $limit = 1000
     ): array;
 }

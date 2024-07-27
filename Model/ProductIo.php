@@ -188,7 +188,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         string $select = "*",
         string $filter = "",
         int $page = 1,
-        int $limit = 50
+        int $limit = 100
     ): array {
         // create product collection
         $productCollection = $this->productCollectionFactory->create();
@@ -284,8 +284,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         if (!$limit || $limit <= 0) {
             $limit = 10;
         }
-        if ($limit > 50) {
-            $limit = 50; // maximum page size
+        if ($limit > 100) {
+            $limit = 100; // maximum page size
         }
 
         $result = [];
@@ -430,7 +430,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 // populate imageInfo
                 $imageInfo = $this->populateImageInfo($productId, $store);
                 if (count($imageInfo)) {
-                    $productData['image_info'] = $this->populateImageInfo($productId, $store);
+                    $productData['image_info'] = $imageInfo;
                 }
                 $result[$sku] = $productData;
             }

@@ -75,7 +75,7 @@ class ShipmentIo implements \WiseRobot\Io\Api\ShipmentIoInterface
         int $store,
         string $filter = "",
         int $page = 1,
-        int $limit = 50
+        int $limit = 1000
     ): array {
         // create shipment collection
         $shipmentCollection = $this->shipmentCollectionFactory->create();
@@ -142,10 +142,10 @@ class ShipmentIo implements \WiseRobot\Io\Api\ShipmentIoInterface
             $page = 1;
         }
         if (!$limit || $limit <= 0) {
-            $limit = 10;
+            $limit = 100;
         }
-        if ($limit > 50) {
-            $limit = 50; // maximum page size
+        if ($limit > 1000) {
+            $limit = 1000; // maximum page size
         }
 
         $result = [];

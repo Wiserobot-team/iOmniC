@@ -99,7 +99,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         int $store,
         string $filter = "",
         int $page = 1,
-        int $limit = 50
+        int $limit = 100
     ): array {
         // create order collection
         $orderCollection = $this->orderCollectionFactory->create();
@@ -168,8 +168,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         if (!$limit || $limit <= 0) {
             $limit = 10;
         }
-        if ($limit > 50) {
-            $limit = 50; // maximum page size
+        if ($limit > 100) {
+            $limit = 100; // maximum page size
         }
 
         $result = [];
@@ -207,13 +207,13 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 // shipment info
                 $shipmentInfo = $this->getShipmentInfo($order);
                 if (count($shipmentInfo)) {
-                    $orderData['shipment_info'] = $this->getShipmentInfo($order);
+                    $orderData['shipment_info'] = $shipmentInfo;
                 }
 
                 // refund info
                 $refundInfo = $this->getRefundInfo($order);
                 if (count($refundInfo)) {
-                    $orderData['refund_info'] = $this->getRefundInfo($order);
+                    $orderData['refund_info'] = $refundInfo;
                 }
 
                 // item info
