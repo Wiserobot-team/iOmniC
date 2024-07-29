@@ -118,10 +118,28 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             $this->results["error"] = $message;
             throw new WebapiException(__($errorMess), 0, 400, $this->results);
         }
-        $orderCollection->addFieldToFilter('store_id', $store);
+        $orderCollection->addFieldToFilter('main_table.store_id', $store);
 
         // selecting
         $orderCollection->addFieldToSelect('*');
+
+        // join the sales_shipment, sales_shipment_track, and sales_creditmemo tables to the sales_order table
+        $orderCollection->getSelect()
+            ->joinLeft(
+                ['shipment' => $this->resourceConnection->getTableName('sales_shipment')],
+                'main_table.entity_id = shipment.order_id',
+                ['shipment_updated_at' => 'shipment.updated_at']
+            )
+            ->joinLeft(
+                ['shipment_track' => $this->resourceConnection->getTableName('sales_shipment_track')],
+                'shipment.entity_id = shipment_track.parent_id',
+                ['shipment_track_updated_at' => 'shipment_track.updated_at']
+            )
+            ->joinLeft(
+                ['creditmemo' => $this->resourceConnection->getTableName('sales_creditmemo')],
+                'main_table.entity_id = creditmemo.order_id',
+                ['creditmemo_updated_at' => 'creditmemo.updated_at']
+            );
 
         // filtering
         $filter = trim((string) $filter);
@@ -151,10 +169,23 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     $this->results["error"] = $message;
                     throw new WebapiException(__($errorMess), 0, 400, $this->results);
                 }
-                $orderCollection->addFieldToFilter(
-                    $fieldName,
-                    [$operator => $fieldValue]
-                );
+
+                // get orders where either shipment, shipment track, or credit memo was updated later than the specified time
+                if ($fieldName == "updated_at") {
+                    $orderCollection->addFieldToFilter(
+                        ['shipment.updated_at', 'shipment_track.updated_at', 'creditmemo.updated_at'],
+                        [
+                            [$operator => $fieldValue],
+                            [$operator => $fieldValue],
+                            [$operator => $fieldValue]
+                        ]
+                    );
+                } else {
+                    $orderCollection->addFieldToFilter(
+                        $fieldName,
+                        [$operator => $fieldValue]
+                    );
+                }
             }
         }
         // sorting
