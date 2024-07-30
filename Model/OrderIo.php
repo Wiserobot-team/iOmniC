@@ -173,8 +173,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 // get orders where either shipment, shipment track, or credit memo was updated later than the specified time
                 if ($fieldName == "updated_at") {
                     $orderCollection->addFieldToFilter(
-                        ['shipment.updated_at', 'shipment_track.updated_at', 'creditmemo.updated_at'],
+                        ['main_table.updated_at', 'shipment.updated_at', 'shipment_track.updated_at', 'creditmemo.updated_at'],
                         [
+                            [$operator => $fieldValue],
                             [$operator => $fieldValue],
                             [$operator => $fieldValue],
                             [$operator => $fieldValue]
