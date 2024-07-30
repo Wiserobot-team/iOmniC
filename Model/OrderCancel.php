@@ -109,13 +109,6 @@ class OrderCancel implements \WiseRobot\Io\Api\OrderCancelInterface
                 return false;
             }
 
-            if (!$order->canCancel()) {
-                $message = "Skip order " . $orderId . " cannot be canceled";
-                $this->results["response"]["data"]["success"][] = $message;
-                $this->log($message);
-                return false;
-            }
-
             // cancel the order
             $order->cancel();
             $order->setData("status", "canceled");
