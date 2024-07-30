@@ -142,7 +142,6 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                 $this->log($message);
                 return false;
             }
-            $orderIId = $order->getIncrementId();
             if ($order->getStatus() == "closed") {
                 $message = "Skip order " . $orderId . " has been closed";
                 $this->results["response"]["data"]["success"][] = $message;
@@ -155,7 +154,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                     if (!$order->hasCreditmemos()) {
                         $this->createCreditMemo($order, $refundInfo);
                         $orderObject = $this->orderFactory->create()
-                            ->loadByIncrementId($orderIId);
+                            ->loadByIncrementId($orderId);
                         if ($orderObject->getStatus() != "closed" &&
                             in_array($orderObject->getStatus(), ["complete"])) {
                             $orderObject->setData("status", "closed");
@@ -164,7 +163,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                             return false;
                         }
                     } else {
-                        $message = "Skip order " . $orderIId . " has been refunded";
+                        $message = "Skip order " . $orderId . " has been refunded";
                         $this->results["response"]["data"]["success"][] = $message;
                         $this->log($message);
                         return false;
@@ -173,7 +172,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                     $order->setData("status", "closed");
                     $order->setData("state", "closed");
                     $order->save();
-                    $message = "Order " . $orderIId . " set closed status success";
+                    $message = "Order " . $orderId . " set closed status success";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
                     return false;
@@ -184,7 +183,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                     $order->setData("status", "closed");
                     $order->setData("state", "closed");
                     $order->save();
-                    $message = "Order " . $orderIId . " set closed status success";
+                    $message = "Order " . $orderId . " set closed status success";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
                     return false;
@@ -192,7 +191,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                 if (!$order->hasCreditmemos()) {
                     $this->createCreditMemo($order, $refundInfo);
                     $orderObject = $this->orderFactory->create()
-                        ->loadByIncrementId($orderIId);
+                        ->loadByIncrementId($orderId);
                     if ($orderObject->getStatus() != "closed" &&
                         in_array($orderObject->getStatus(), ["processing"])) {
                         $orderObject->setData("status", "closed");
@@ -201,7 +200,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                         return false;
                     }
                 } else {
-                    $message = "Skip order " . $orderIId . " has been refunded";
+                    $message = "Skip order " . $orderId . " has been refunded";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
                     return false;
@@ -228,7 +227,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
         \Magento\Sales\Model\Order $order,
         array $refundInfo
     ): bool {
-        $orderIId = $order->getIncrementId();
+        $orderId = $order->getIncrementId();
         $shippingRefundedTotal = 0;
         $shippingTaxRefundedTotal = 0;
         $taxRefundedTotal = 0;
@@ -261,7 +260,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                 }
             }
             if (!count($infoItems)) {
-                $message =  "WARN create credit memo for order " . $orderIId . " items ordered do not match";
+                $message =  "WARN create credit memo for order " . $orderId . " items ordered do not match";
                 $this->results["response"]["data"]["error"][] = $message;
                 $this->log($message);
                 return false;
@@ -278,7 +277,7 @@ class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
                 $subtotalRefundedTotal += (float) $creditMemo->getData("subtotal");
                 $totalRefundedTotal += (float) $creditMemo->getData("base_grand_total");
 
-                $message = "Credit Memo '" . $creditMemo->getIncrementId() . "' imported for order " . $orderIId;
+                $message = "Credit Memo '" . $creditMemo->getIncrementId() . "' imported for order " . $orderId;
                 $this->results["response"]["data"]["success"][] = $message;
                 $this->log($message);
 
