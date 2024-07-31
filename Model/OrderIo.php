@@ -125,6 +125,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
 
         // join the sales_shipment, sales_shipment_track, and sales_creditmemo tables to the sales_order table
         $orderCollection->getSelect()
+            ->distinct(true)
             ->joinLeft(
                 ['shipment' => $this->resourceConnection->getTableName('sales_shipment')],
                 'main_table.entity_id = shipment.order_id',
@@ -139,7 +140,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 ['creditmemo' => $this->resourceConnection->getTableName('sales_creditmemo')],
                 'main_table.entity_id = creditmemo.order_id',
                 ['creditmemo_updated_at' => 'creditmemo.updated_at']
-            );
+            )
+            ->group('main_table.entity_id');
 
         // filtering
         $filter = trim((string) $filter);
