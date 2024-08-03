@@ -65,7 +65,7 @@
         </resources>
     </route>
     <route url="/V1/io/shipments" method="POST">
-        <service class="WiseRobot\Io\Api\ShipmentIoInterface" method="getList" />
+        <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="getList" />
         <resources>
             <resource ref="self"/>
         </resources>

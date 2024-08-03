@@ -16,7 +16,6 @@
     <preference for="WiseRobot\Io\Api\ProductManagementInterface" type="WiseRobot\Io\Model\ProductManagement" />
     <preference for="WiseRobot\Io\Api\OrderIoInterface" type="WiseRobot\Io\Model\OrderIo" />
     <preference for="WiseRobot\Io\Api\OrderManagementInterface" type="WiseRobot\Io\Model\OrderManagement" />
-    <preference for="WiseRobot\Io\Api\ShipmentIoInterface" type="WiseRobot\Io\Model\ShipmentIo" />
     <preference for="WiseRobot\Io\Api\ShipmentManagementInterface" type="WiseRobot\Io\Model\ShipmentManagement" />
     <preference for="WiseRobot\Io\Api\RefundManagementInterface" type="WiseRobot\Io\Model\RefundManagement" />
     <virtualType name="Magento\Sales\Model\ResourceModel\Order\Grid" type="Magento\Sales\Model\ResourceModel\Grid">

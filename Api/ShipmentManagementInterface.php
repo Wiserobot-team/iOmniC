@@ -18,6 +18,22 @@ namespace WiseRobot\Io\Api;
 interface ShipmentManagementInterface
 {
     /**
+     * Filter Shipments
+     *
+     * @param int $store
+     * @param string $filter
+     * @param int $page
+     * @param int $limit
+     * @return array
+     */
+    public function getList(
+        int $store,
+        string $filter = "",
+        int $page = 1,
+        int $limit = 1000
+    ): array;
+
+    /**
      * Create or update Shipment
      *
      * @param string $orderId
