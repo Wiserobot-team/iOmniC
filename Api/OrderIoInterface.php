@@ -32,4 +32,25 @@ interface OrderIoInterface
         int $page = 1,
         int $limit = 100
     ): array;
+
+    /**
+     * Get Magento Payment Methods
+     *
+     * @return array
+     */
+    public function getPaymentMethods(): array;
+
+    /**
+     * Get Magento Shipping Methods
+     *
+     * @return array
+     */
+    public function getShippingMethods(): array;
+
+    /**
+     * Get Magento Shipping Carriers
+     *
+     * @return array
+     */
+    public function getShippingCarriers(): array;
 }

@@ -15,17 +15,41 @@ declare(strict_types=1);
 
 namespace WiseRobot\Io\Api;
 
-interface RefundImportInterface
+interface OrderManagementInterface
 {
     /**
-     * Create Refund
+     * Create or update Order
      *
-     * @param string $orderId
+     * @param int $store
+     * @param string[] $orderInfo
+     * @param string[] $paymentInfo
+     * @param string[] $shippingInfo
+     * @param string[] $billingInfo
+     * @param mixed $itemInfo
+     * @param mixed $statusHistories
+     * @param mixed $shipmentInfo
      * @param mixed $refundInfo
      * @return array
      */
     public function import(
-        string $orderId,
-        mixed $refundInfo
+        int $store,
+        array $orderInfo,
+        array $paymentInfo,
+        array $shippingInfo,
+        array $billingInfo,
+        mixed $itemInfo,
+        mixed $statusHistories = [],
+        mixed $shipmentInfo = [],
+        mixed $refundInfo = []
+    ): array;
+
+    /**
+     * Cancel Order
+     *
+     * @param string $orderId
+     * @return array
+     */
+    public function cancel(
+        string $orderId
     ): array;
 }

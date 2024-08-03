@@ -22,7 +22,7 @@ use Magento\Sales\Model\Convert\Order as ConvertOrder;
 use Magento\Sales\Model\Order\Shipment\TrackFactory as ShipmentTrackFactory;
 use Magento\Framework\Webapi\Exception as WebapiException;
 
-class ShipmentImport implements \WiseRobot\Io\Api\ShipmentImportInterface
+class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterface
 {
     /**
      * @var string

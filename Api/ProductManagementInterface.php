@@ -15,12 +15,25 @@ declare(strict_types=1);
 
 namespace WiseRobot\Io\Api;
 
-interface PaymentIoInterface
+interface ProductManagementInterface
 {
     /**
-     * Get Magento Payment Methods
+     * Create or update Product
      *
+     * @param int $store
+     * @param string[] $attributeInfo
+     * @param string[] $variationInfo
+     * @param string[] $groupedInfo
+     * @param string[] $stockInfo
+     * @param string[] $imageInfo
      * @return array
      */
-    public function getList(): array;
+    public function import(
+        int $store,
+        array $attributeInfo,
+        array $variationInfo,
+        array $groupedInfo = [],
+        array $stockInfo = [],
+        array $imageInfo = []
+    ): array;
 }

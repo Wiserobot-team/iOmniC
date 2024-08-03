@@ -44,7 +44,7 @@ use Magento\Framework\Webapi\Exception as WebapiException;
 use WiseRobot\Io\Model\IoOrderFactory;
 use WiseRobot\Io\Helper\Sku as SkuHelper;
 
-class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
+class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
 {
     /**
      * @var string
@@ -1809,6 +1809,85 @@ class OrderImport implements \WiseRobot\Io\Api\OrderImportInterface
             $this->results["response"]["data"]["success"][] = $message;
             $this->log($message);
         }
+        return false;
+    }
+
+    /**
+     * Cancel Order
+     *
+     * @param string $orderId
+     * @return array
+     */
+    public function cancel(string $orderId): array
+    {
+        // response messages
+        $this->results["response"]["data"]["success"] = [];
+        $this->results["response"]["data"]["error"] = [];
+
+        $errorMess = "data request error";
+
+        // order id
+        if (!$orderId) {
+            $message = "Field: 'order_id' is a required field";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR: " . $message);
+            $this->cleanResponseMessages();
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+        }
+
+        try {
+            $this->cancelOrder($orderId);
+            $this->cleanResponseMessages();
+            return $this->results;
+        } catch (\Exception $e) {
+            $errorMess = "order cancellation error";
+            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+        }
+    }
+
+    /**
+     * Cancel the order using the order id
+     *
+     * @param string $orderId
+     * @return bool
+     */
+    public function cancelOrder(string $orderId): bool
+    {
+        try {
+            $order = $this->orderFactory->create()
+                ->loadByIncrementId($orderId);
+            if (!$order || !$order->getId()) {
+                $message = "WARN cannot load order " . $orderId;
+                $this->results["response"]["data"]["error"][] = $message;
+                $this->log($message);
+                return false;
+            }
+
+            if ($order->getStatus() == "canceled") {
+                $message = "Skip order " . $orderId . " has been canceled";
+                $this->results["response"]["data"]["success"][] = $message;
+                $this->log($message);
+                return false;
+            }
+
+            // cancel the order
+            $order->cancel();
+            $order->setData("status", "canceled");
+            $order->setData("state", "canceled");
+            $order->save();
+
+            $message = "Order " . $orderId . " has been successfully canceled";
+            $this->results["response"]["data"]["success"][] = $message;
+            $this->log($message);
+            return true;
+        } catch (\Exception $e) {
+            $message = $orderId . ": " . $e->getMessage();
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR " . $message);
+            $this->cleanResponseMessages();
+            throw new WebapiException(__($e->getMessage()), 0, 400);
+        }
+
         return false;
     }
 

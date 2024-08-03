@@ -21,7 +21,7 @@ use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\Order\CreditmemoFactory;
 use Magento\Framework\Webapi\Exception as WebapiException;
 
-class RefundImport implements \WiseRobot\Io\Api\RefundImportInterface
+class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
 {
     /**
      * @var string

@@ -15,15 +15,17 @@ declare(strict_types=1);
 
 namespace WiseRobot\Io\Api;
 
-interface OrderCancelInterface
+interface RefundManagementInterface
 {
     /**
-     * Cancel Order
+     * Create Refund
      *
      * @param string $orderId
+     * @param mixed $refundInfo
      * @return array
      */
-    public function cancel(
-        string $orderId
+    public function import(
+        string $orderId,
+        mixed $refundInfo
     ): array;
 }

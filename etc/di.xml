@@ -13,16 +13,12 @@
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
     <preference for="WiseRobot\Io\Api\ProductIoInterface" type="WiseRobot\Io\Model\ProductIo" />
-    <preference for="WiseRobot\Io\Api\ProductImportInterface" type="WiseRobot\Io\Model\ProductImport" />
+    <preference for="WiseRobot\Io\Api\ProductManagementInterface" type="WiseRobot\Io\Model\ProductManagement" />
     <preference for="WiseRobot\Io\Api\OrderIoInterface" type="WiseRobot\Io\Model\OrderIo" />
-    <preference for="WiseRobot\Io\Api\OrderImportInterface" type="WiseRobot\Io\Model\OrderImport" />
-    <preference for="WiseRobot\Io\Api\OrderCancelInterface" type="WiseRobot\Io\Model\OrderCancel" />
-    <preference for="WiseRobot\Io\Api\PaymentIoInterface" type="WiseRobot\Io\Model\PaymentIo" />
-    <preference for="WiseRobot\Io\Api\ShippingIoInterface" type="WiseRobot\Io\Model\ShippingIo" />
-    <preference for="WiseRobot\Io\Api\CarrierIoInterface" type="WiseRobot\Io\Model\CarrierIo" />
+    <preference for="WiseRobot\Io\Api\OrderManagementInterface" type="WiseRobot\Io\Model\OrderManagement" />
     <preference for="WiseRobot\Io\Api\ShipmentIoInterface" type="WiseRobot\Io\Model\ShipmentIo" />
-    <preference for="WiseRobot\Io\Api\ShipmentImportInterface" type="WiseRobot\Io\Model\ShipmentImport" />
-    <preference for="WiseRobot\Io\Api\RefundImportInterface" type="WiseRobot\Io\Model\RefundImport" />
+    <preference for="WiseRobot\Io\Api\ShipmentManagementInterface" type="WiseRobot\Io\Model\ShipmentManagement" />
+    <preference for="WiseRobot\Io\Api\RefundManagementInterface" type="WiseRobot\Io\Model\RefundManagement" />
     <virtualType name="Magento\Sales\Model\ResourceModel\Order\Grid" type="Magento\Sales\Model\ResourceModel\Grid">
         <arguments>
             <argument name="columns" xsi:type="array">

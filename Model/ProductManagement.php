@@ -47,7 +47,7 @@ use WiseRobot\Io\Helper\Category as CategoryHelper;
 use WiseRobot\Io\Helper\Image as ImageHelper;
 use WiseRobot\Io\Model\ProductImageFactory;
 
-class ProductImport implements \WiseRobot\Io\Api\ProductImportInterface
+class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 {
     /**
      * @var string

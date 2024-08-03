@@ -20,6 +20,7 @@ use Magento\Store\Model\StoreManagerInterface;
 use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
 use Magento\Payment\Model\Config as PaymentConfig;
+use Magento\Shipping\Model\Config as ShippingConfig;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Serialize\SerializerInterface;
 use Magento\Framework\Webapi\Exception as WebapiException;
@@ -51,6 +52,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      */
     public $paymentConfig;
     /**
+     * @var ShippingConfig
+     */
+    public $shippingConfig;
+    /**
      * @var ResourceConnection
      */
     public $resourceConnection;
@@ -65,6 +70,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @param OrderFactory $orderFactory
      * @param OrderCollectionFactory $orderCollectionFactory
      * @param PaymentConfig $paymentConfig
+     * @param ShippingConfig $shippingConfig
      * @param ResourceConnection $resourceConnection
      * @param SerializerInterface $serializer
      */
@@ -74,6 +80,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         OrderFactory $orderFactory,
         OrderCollectionFactory $orderCollectionFactory,
         PaymentConfig $paymentConfig,
+        ShippingConfig $shippingConfig,
         ResourceConnection $resourceConnection,
         SerializerInterface $serializer
     ) {
@@ -82,6 +89,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $this->orderFactory = $orderFactory;
         $this->orderCollectionFactory = $orderCollectionFactory;
         $this->paymentConfig = $paymentConfig;
+        $this->shippingConfig = $shippingConfig;
         $this->resourceConnection = $resourceConnection;
         $this->serializer = $serializer;
     }
@@ -841,5 +849,80 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         } else {
             return 'no';
         }
+    }
+
+    /**
+     * Get Payment Methods
+     *
+     * @return array
+     */
+    public function getPaymentMethods(): array
+    {
+        $paymentMethodArray = [];
+        $payments = $this->paymentConfig->getActiveMethods();
+        foreach ($payments as $paymentCode => $paymentModel) {
+            $paymentTitle = $this->scopeConfig->getValue(
+                'payment/' . $paymentCode . '/title'
+            );
+            if (!$paymentTitle) {
+                continue;
+            }
+            $paymentMethodArray[][$paymentCode] = $paymentTitle;
+        }
+
+        return $paymentMethodArray;
+    }
+
+    /**
+     * Get Shipping Methods
+     *
+     * @return array
+     */
+    public function getShippingMethods(): array
+    {
+        $shipMethods = [];
+        $activeCarriers = $this->shippingConfig->getActiveCarriers();
+        foreach ($activeCarriers as $carrierCode => $carrierModel) {
+            $carrierTitle = $this->scopeConfig->getValue(
+                'carriers/' . $carrierCode . '/title'
+            );
+            $carrierMethods = $carrierModel->getAllowedMethods();
+            if ($carrierMethods) {
+                foreach ($carrierMethods as $methodCode => $methodLabel) {
+                    if (is_array($methodLabel)) {
+                        foreach ($methodLabel as $methodLabelKey => $methodLabelValue) {
+                            $shipMethods[][$methodLabelKey] = $methodLabelValue;
+                        }
+                    } else {
+                        $shipMethod = $carrierCode . "_" . $methodCode;
+                        $shipMethodTitle = $carrierTitle . " - " . $methodLabel;
+                        $shipMethods[][$shipMethod] = $shipMethodTitle;
+                    }
+                }
+            }
+        }
+
+        return $shipMethods;
+    }
+
+    /**
+     * Get Shipping Carriers
+     *
+     * @return array
+     */
+    public function getShippingCarriers(): array
+    {
+        $storeId = 0;
+        $carriers = [];
+        $carriers[]["custom"] = __("Custom Value");
+        // get all system carriers
+        $carrierInstances = $this->shippingConfig->getAllCarriers($storeId);
+        foreach ($carrierInstances as $code => $carrier) {
+            if ($carrier->isTrackingAvailable()) {
+                $carriers[][$code] = $carrier->getConfigData("title");
+            }
+        }
+
+        return $carriers;
     }
 }

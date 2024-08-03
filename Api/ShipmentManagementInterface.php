@@ -15,31 +15,17 @@ declare(strict_types=1);
 
 namespace WiseRobot\Io\Api;
 
-interface OrderImportInterface
+interface ShipmentManagementInterface
 {
     /**
-     * Create or update Order
+     * Create or update Shipment
      *
-     * @param int $store
-     * @param string[] $orderInfo
-     * @param string[] $paymentInfo
-     * @param string[] $shippingInfo
-     * @param string[] $billingInfo
-     * @param mixed $itemInfo
-     * @param mixed $statusHistories
+     * @param string $orderId
      * @param mixed $shipmentInfo
-     * @param mixed $refundInfo
      * @return array
      */
     public function import(
-        int $store,
-        array $orderInfo,
-        array $paymentInfo,
-        array $shippingInfo,
-        array $billingInfo,
-        mixed $itemInfo,
-        mixed $statusHistories = [],
-        mixed $shipmentInfo = [],
-        mixed $refundInfo = []
+        string $orderId,
+        mixed $shipmentInfo
     ): array;
 }
