@@ -75,13 +75,13 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      *
      * @param \Magento\Catalog\Model\Product $product
      * @param array $imagePlacementsToSet
-     * @param \WiseRobot\Io\Model\ProductImport $importModel
+     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
      * @return int
      */
     public function populateProductImage(
         \Magento\Catalog\Model\Product $product,
         array $imagePlacementsToSet,
-        \WiseRobot\Io\Model\ProductImport $importModel
+        \WiseRobot\Io\Model\ProductManagement $productManagement
     ): int {
         $totalImagesAdded = 0;
         if (!$product || !$product->getId()) {
@@ -116,10 +116,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 // if stored image url is NOT same as current url
                 $imageUrl = $imagePlacementsToSet[$currentPlacementName];
                 // remove old image from product
-                $this->removeImage($product, $imgPos, $importModel);
+                $this->removeImage($product, $imgPos, $productManagement);
 
                 // add current url image to product
-                $addedImageCount = $this->addImageToProductGallery($product, $imageUrl, $flag, $imgPos, $importModel);
+                $addedImageCount = $this->addImageToProductGallery($product, $imageUrl, $flag, $imgPos, $productManagement);
                 if ($addedImageCount) {
                     $totalImagesAdded = $totalImagesAdded + $addedImageCount;
                 } else {
@@ -128,7 +128,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
             } elseif (isset($oldImages[$currentPlacementName])) {
                 // if has NO image to set but old data exist then remove that image
                 $totalImagesAdded ++;
-                $this->removeImage($product, $imgPos, $importModel);
+                $this->removeImage($product, $imgPos, $productManagement);
             }
             $flag = false;
         }
@@ -139,12 +139,12 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
             try {
                 $product->save();
                 $message = "Sku '" . $sku . "' - product id <" . $productId . "> saved successful";
-                $importModel->results["response"]["image"]["success"][] = $message;
-                $importModel->log("SAVED: " . $message);
+                $productManagement->results["response"]["image"]["success"][] = $message;
+                $productManagement->log("SAVED: " . $message);
             } catch (\Exception $e) {
                 $message = "Sku '" . $sku . "' - product id <" . $productId . "> set image: " .  $e->getMessage();
-                $importModel->results["response"]["image"]["error"][] = $message;
-                $importModel->log("ERROR: " . $message);
+                $productManagement->results["response"]["image"]["error"][] = $message;
+                $productManagement->log("ERROR: " . $message);
             }
         }
 
@@ -158,7 +158,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $imageUrl
      * @param bool $isMainImage
      * @param int $position
-     * @param \WiseRobot\Io\Model\ProductImport $importModel
+     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
      * @return int
      */
     public function addImageToProductGallery(
@@ -166,7 +166,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         string $imageUrl,
         bool $isMainImage,
         int $position,
-        \WiseRobot\Io\Model\ProductImport $importModel
+        \WiseRobot\Io\Model\ProductManagement $productManagement
     ): int {
         $sku = $product->getSku();
         $productId = $product->getId();
@@ -208,15 +208,15 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
 
                 $message = "Added image '" . $imageUrl . "' at position " .
                     $position . " to '" . $sku . "' - product id <" . $productId . ">";
-                $importModel->results["response"]["image"]["success"][] = $message;
-                $importModel->log($message);
+                $productManagement->results["response"]["image"]["success"][] = $message;
+                $productManagement->log($message);
 
                 if ($this->driverFile->isExists($path)) {
                     try {
                         $this->driverFile->deleteFile($path);
                     } catch (\Exception $error) {
                         $errorMessage = 'Error while delete file: ' . $error->getMessage();
-                        $importModel->log($errorMessage);
+                        $productManagement->log($errorMessage);
                     }
                 }
 
@@ -224,14 +224,14 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
             } else {
                 $message = "WARN get image '" . $imageUrl . "' failed" . " for '" .
                     $product->getSku() . "' - product id <" . $product->getId() . ">" ;
-                $importModel->results["response"]["image"]["error"][] = $message;
-                $importModel->log($message);
+                $productManagement->results["response"]["image"]["error"][] = $message;
+                $productManagement->log($message);
             }
         } catch (\Exception $e) {
             $message = "WARN get image '" . $imageUrl . "' failed for '" .
                 $sku . "' - product id <" . $productId . "> : " . $e->getMessage();
-            $importModel->results["response"]["image"]["error"][] = $message;
-            $importModel->log($message);
+            $productManagement->results["response"]["image"]["error"][] = $message;
+            $productManagement->log($message);
         }
 
         return 0;
@@ -242,13 +242,13 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      *
      * @param \Magento\Catalog\Model\Product $product
      * @param int $position
-     * @param \WiseRobot\Io\Model\ProductImport $importModel
+     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
      * @return void
      */
     public function removeImage(
         \Magento\Catalog\Model\Product &$product,
         int $position,
-        \WiseRobot\Io\Model\ProductImport $importModel
+        \WiseRobot\Io\Model\ProductManagement $productManagement
     ): void {
         $sku = $product->getSku();
         $productId = $product->getId();
@@ -258,13 +258,13 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 foreach ($gallery["images"] as &$image) {
                     if ($image["position"] == $position) {
                         $image["removed"] = 1;
-                        $this->deleteProductImage($image["file"], $importModel);
+                        $this->deleteProductImage($image["file"], $productManagement);
                         $nameImage = explode("/", (string) $image["file"]);
                         $tamp = count($nameImage);
                         $message = "Sku '" . $sku . "' - product id <" .
                             $productId . "> " . "deleted image '". $nameImage[$tamp-1] . "' at position " . $position;
-                        $importModel->results["response"]["image"]["success"][] = $message;
-                        $importModel->log($message);
+                        $productManagement->results["response"]["image"]["success"][] = $message;
+                        $productManagement->log($message);
                     }
                 }
                 $product->setData("media_gallery", $gallery);
@@ -275,8 +275,8 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
             }
         } catch (\Exception $e) {
             $message = "Sku '" . $sku . "' - product id <" . $productId . "> remove image: " .  $e->getMessage();
-            $importModel->results["response"]["image"]["error"][] = $message;
-            $importModel->log("ERROR: " . $message);
+            $productManagement->results["response"]["image"]["error"][] = $message;
+            $productManagement->log("ERROR: " . $message);
             $this->deleteStoredProductImages($product->getSku());
         }
     }
@@ -343,12 +343,12 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * Delete product image file
      *
      * @param string $path
-     * @param \WiseRobot\Io\Model\ProductImport $importModel
+     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
      * @return void
      */
     public function deleteProductImage(
         string $path,
-        \WiseRobot\Io\Model\ProductImport $importModel
+        \WiseRobot\Io\Model\ProductManagement $productManagement
     ): void {
         $imagePath = 'catalog/product/' . trim((string) $path, ' /');
         $filePath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
@@ -358,7 +358,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 $this->driverFile->deleteFile($filePath);
             } catch (\Exception $error) {
                 $errorMessage = 'Error while delete product image: ' . $error->getMessage();
-                $importModel->log($errorMessage);
+                $productManagement->log($errorMessage);
             }
         }
     }
