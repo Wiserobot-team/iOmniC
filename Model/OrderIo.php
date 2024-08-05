@@ -109,30 +109,57 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         int $page = 1,
         int $limit = 100
     ): array {
-        // create order collection
-        $orderCollection = $this->orderCollectionFactory->create();
-        $errorMess = "data request error";
-
-        // store info
-        if (!$store) {
-            $message = "Field: 'store' is a required field";
-            $this->results["error"] = $message;
-            throw new WebapiException(__($errorMess), 0, 400, $this->results);
+        $storeInfo = $this->getStoreInfo($store);
+        $orderCollection = $this->createOrderCollection($store);
+        $this->applyFilter($orderCollection, $filter);
+        $this->applySortingAndPaging($orderCollection, $page, $limit);
+        $result = [];
+        if ($orderCollection->getSize()) {
+            $storeName = $storeInfo->getName();
+            foreach ($orderCollection as $order) {
+                $orderIId = $order->getIncrementId();
+                if ($orderIId) {
+                    $orderData = $this->formatOrderData($order, $storeName);
+                    if ($orderData) {
+                        $result[$orderIId] = $orderData;
+                    }
+                }
+            }
         }
+        return $result;
+    }
+
+    /**
+     * Get store information
+     *
+     * @param int $store
+     * @return \Magento\Store\Model\Store
+     */
+    public function getStoreInfo(
+        int $store
+    ): \Magento\Store\Model\Store {
         try {
-            $storeInfo = $this->storeManager->getStore($store);
+            return $this->storeManager->getStore($store);
         } catch (\Exception $e) {
-            $message = "Requested 'store' " . $store . " doesn't exist";
+            $message = "Requested 'store' {$store} doesn't exist";
             $this->results["error"] = $message;
-            throw new WebapiException(__($errorMess), 0, 400, $this->results);
+            throw new WebapiException(__("data request error"), 0, 400, $this->results);
         }
-        $orderCollection->addFieldToFilter('main_table.store_id', $store);
+    }
 
-        // selecting
-        $orderCollection->addFieldToSelect('*');
-
-        // join the sales_shipment, sales_shipment_track, and sales_creditmemo tables to the sales_order table
-        $orderCollection->getSelect()
+    /**
+     * Create order collection with basic filters
+     *
+     * @param int $store
+     * @return \Magento\Sales\Model\ResourceModel\Order\Collection
+     */
+    public function createOrderCollection(
+        int $store
+    ): \Magento\Sales\Model\ResourceModel\Order\Collection {
+        $orderCollection = $this->orderCollectionFactory->create();
+        $orderCollection->addFieldToFilter('main_table.store_id', $store)
+            ->addFieldToSelect('*')
+            ->getSelect()
             ->distinct(true)
             ->joinLeft(
                 ['shipment' => $this->resourceConnection->getTableName('sales_shipment')],
@@ -150,129 +177,74 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 ['creditmemo_updated_at' => 'creditmemo.updated_at']
             )
             ->group('main_table.entity_id');
+        return $orderCollection;
+    }
 
-        // filtering
+    /**
+     * Apply sorting and paging to the order collection
+     *
+     * @param \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection
+     * @param int $page
+     * @param int $limit
+     */
+    public function applySortingAndPaging(
+        \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection,
+        int $page,
+        int $limit
+    ): void {
+        $orderCollection->setOrder('entity_id', 'asc')
+            ->setPageSize(min(max(1, (int) $limit), 100))
+            ->setCurPage(max(1, (int) $page));
+    }
+
+    /**
+     * Apply filters to the order collection
+     *
+     * @param \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection
+     * @param string $filter
+     */
+    public function applyFilter(
+        \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection,
+        string $filter
+    ): void {
         $filter = trim((string) $filter);
-        if ($filter) {
-            $filterArray = explode(" and ", (string) $filter);
-            foreach ($filterArray as $filterItem) {
-                $operator = $this->processFilter((string) $filterItem);
-                if (!$operator) {
-                    continue;
-                }
-                $condition = array_map('trim', explode($operator, (string) $filterItem));
-                if (count($condition) != 2) {
-                    continue;
-                }
-                if (!$condition[0] || !$condition[1]) {
-                    continue;
-                }
-                $fieldName = $condition[0];
-                $fieldValue = $condition[1];
-
-                // check if column doesn't exist in order table
-                $tableName = $this->resourceConnection->getTableName(['sales_order', '']);
-                if ($this->resourceConnection->getConnection()
-                        ->tableColumnExists($tableName, $fieldName) !== true) {
-                    $message = "Field: 'filter' - column '" .
-                        $fieldName . "' doesn't exist in order table";
-                    $this->results["error"] = $message;
-                    throw new WebapiException(__($errorMess), 0, 400, $this->results);
-                }
-
-                // get orders where either shipment, shipment track, or credit memo was updated later than the specified time
-                if ($fieldName == "updated_at") {
-                    $orderCollection->addFieldToFilter(
-                        ['main_table.updated_at', 'shipment.updated_at', 'shipment_track.updated_at', 'creditmemo.updated_at'],
-                        [
-                            [$operator => $fieldValue],
-                            [$operator => $fieldValue],
-                            [$operator => $fieldValue],
-                            [$operator => $fieldValue]
-                        ]
-                    );
-                } else {
-                    $orderCollection->addFieldToFilter(
-                        $fieldName,
+        $filterArray = explode(" and ", (string) $filter);
+        $tableName = $this->resourceConnection->getTableName('sales_order');
+        $columns = $this->resourceConnection->getConnection()->describeTable($tableName);
+        $columnNames = array_keys($columns);
+        foreach ($filterArray as $filterItem) {
+            $operator = $this->processFilter($filterItem);
+            if (!$operator) {
+                continue;
+            }
+            $condition = array_map('trim', explode($operator, (string) $filterItem));
+            if (count($condition) != 2 || !$condition[0] || !$condition[1]) {
+                continue;
+            }
+            $fieldName = $condition[0];
+            $fieldValue = $condition[1];
+            if (!in_array($fieldName, $columnNames)) {
+                $message = "Field: 'filter' - column '{$fieldName}' doesn't exist in order table";
+                $this->results["error"] = $message;
+                throw new WebapiException(__("data request error"), 0, 400, $this->results);
+            }
+            if ($fieldName === "updated_at") {
+                $orderCollection->addFieldToFilter(
+                    ['main_table.updated_at', 'shipment.updated_at', 'shipment_track.updated_at', 'creditmemo.updated_at'],
+                    [
+                        [$operator => $fieldValue],
+                        [$operator => $fieldValue],
+                        [$operator => $fieldValue],
                         [$operator => $fieldValue]
-                    );
-                }
+                    ]
+                );
+            } else {
+                $orderCollection->addFieldToFilter(
+                    $fieldName,
+                    [$operator => $fieldValue]
+                );
             }
         }
-        // sorting
-        $orderCollection->setOrder('entity_id', 'asc');
-
-        // paging
-        $total = $orderCollection->getSize();
-        if (!$page || $page <= 0) {
-            $page = 1;
-        }
-        if (!$limit || $limit <= 0) {
-            $limit = 10;
-        }
-        if ($limit > 100) {
-            $limit = 100; // maximum page size
-        }
-
-        $result = [];
-        $totalPages = ceil($total / $limit);
-        if ($page > $totalPages) {
-            return $result;
-        }
-
-        $orderCollection->setPageSize($limit);
-        $orderCollection->setCurPage($page);
-        if ($orderCollection->getSize()) {
-            foreach ($orderCollection as $order) {
-                $orderIId = $order->getIncrementId();
-                if (!$orderIId) {
-                    continue;
-                }
-                // order data
-                $orderData = [];
-                $orderData['store'] = $storeInfo->getName();
-                $orderData['order_info'] = $this->getOrderInfo($order);
-
-                // payment info
-                $orderData['payment_info'] = $this->getPaymentInfo($order);
-
-                // shipping and billing info
-                $orderData['shipping_info'] = $this->getShippingInfo($order);
-                $orderData['billing_info'] = $this->getBillingInfo($order);
-
-                // order status histories comment
-                $histories = $this->getStatusHistories($order);
-                if (count($histories)) {
-                    $orderData['status_histories'] = $histories;
-                }
-
-                // shipment info
-                $shipmentInfo = $this->getShipmentInfo($order);
-                if (count($shipmentInfo)) {
-                    $orderData['shipment_info'] = $shipmentInfo;
-                }
-
-                // refund info
-                $refundInfo = $this->getRefundInfo($order);
-                if (count($refundInfo)) {
-                    $orderData['refund_info'] = $refundInfo;
-                }
-
-                // item info
-                $orderItems = $order->getItemsCollection();
-                if ($orderItems->getSize()) {
-                    $orderData['item_info'] = [];
-                    foreach ($orderItems as $item) {
-                        $itemData = $this->getItemInfo($item);
-                        $orderData['item_info'][] = $itemData;
-                    }
-                }
-                $result[$orderIId] = $orderData;
-            }
-            return $result;
-        }
-
-        return $result;
     }
 
     /**
@@ -283,21 +255,56 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      */
     public function processFilter(string $string): string
     {
-        switch ($string) {
-            case strpos((string) $string, " eq ") == true:
-                $operator = "eq";
-                break;
-            case strpos((string) $string, " gt ") == true:
-                $operator = "gt";
-                break;
-            case strpos((string) $string, " le ") == true:
-                $operator = "le";
-                break;
-            default:
-                $operator = '';
+        $operators = [
+            ' eq ' => 'eq',
+            ' gt ' => 'gt',
+            ' le ' => 'le',
+        ];
+        foreach ($operators as $key => $operator) {
+            if (strpos($string, $key) !== false) {
+                return $operator;
+            }
         }
+        return '';
+    }
 
-        return $operator;
+    /**
+     * Get Order Data
+     *
+     * @param \Magento\Sales\Model\Order $order
+     * @param string $storeName
+     * @return array
+     */
+    public function formatOrderData(
+        \Magento\Sales\Model\Order $order,
+        string $storeName
+    ): array {
+        $orderData = [
+            'store' => $storeName,
+            'order_info' => $this->getOrderInfo($order),
+            'payment_info' => $this->getPaymentInfo($order),
+            'shipping_info' => $this->getShippingInfo($order),
+            'billing_info' => $this->getBillingInfo($order)
+        ];
+        if ($order->getItemsCollection()->getSize()) {
+            $orderData['item_info'] = array_values(array_map(
+                fn ($item) => $this->getItemInfo($item),
+                $order->getItemsCollection()->getItems()
+            ));
+        }
+        $histories = $this->getStatusHistories($order);
+        if (!empty($histories)) {
+            $orderData['status_histories'] = $histories;
+        }
+        $shipmentInfo = $this->getShipmentInfo($order);
+        if (!empty($shipmentInfo)) {
+            $orderData['shipment_info'] = $shipmentInfo;
+        }
+        $refundInfo = $this->getRefundInfo($order);
+        if (!empty($refundInfo)) {
+            $orderData['refund_info'] = $refundInfo;
+        }
+        return $orderData;
     }
 
     /**
@@ -310,30 +317,19 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         return [
+            // Basic order details
             "order_id" => $order->getIncrementId(),
             "io_order_id" => $order->getData('io_order_id'),
             "ca_order_id" => $order->getData('ca_order_id'),
-
-            // customer
+            // Customer details
             "email" => $order->getData('customer_email'),
-            "firstname" => $this->formatText(
-                (string) $order->getData('customer_firstname')
-            ),
-            "lastname" => $this->formatText(
-                (string) $order->getData('customer_lastname')
-            ),
-            "prefix" => $this->formatText(
-                (string) $order->getData('customer_prefix')
-            ),
-            "middlename" => $this->formatText(
-                (string) $order->getData('customer_middlename')
-            ),
-            "suffix" => $this->formatText(
-                (string) $order->getData('customer_suffix')
-            ),
+            "firstname" => $order->getData('customer_firstname'),
+            "lastname" => $order->getData('customer_lastname'),
+            "prefix" => $order->getData('customer_prefix'),
+            "middlename" => $order->getData('customer_middlename'),
+            "suffix" => $order->getData('customer_suffix'),
             "taxvat" => $order->getData('customer_taxvat'),
-
-            // order
+            // Order details
             "created_at" => $order->getData('created_at'),
             "updated_at" => $order->getData('updated_at'),
             "store_id" => $order->getData('store_id'),
@@ -371,8 +367,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "base_to_order_rate" => $order->getData('base_to_order_rate'),
             "store_to_base_rate" => $order->getData('store_to_base_rate'),
             "store_to_order_rate" => $order->getData('store_to_order_rate'),
-
-            // invoiced
+            // Invoiced details
             "discount_invoiced" => $order->getData('discount_invoiced'),
             "base_discount_invoiced" => $order->getData('base_discount_invoiced'),
             "tax_invoiced" => $order->getData('tax_invoiced'),
@@ -381,8 +376,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "base_subtotal_invoiced" => $order->getData('base_subtotal_invoiced'),
             "total_invoiced" => $order->getData('total_invoiced'),
             "base_total_invoiced" => $order->getData('base_total_invoiced'),
-
-            // shipping
+            // Shipping details
             "shipping_amount" => $order->getData('shipping_amount'),
             "base_shipping_amount" => $order->getData('base_shipping_amount'),
             "shipping_tax_amount" => $order->getData('shipping_tax_amount'),
@@ -395,8 +389,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "base_shipping_incl_tax" => $order->getData('base_shipping_incl_tax'),
             "shipping_canceled" => $order->getData('shipping_canceled'),
             "base_shipping_canceled" => $order->getData('base_shipping_canceled'),
-
-            // refunded
+            // Refunded details
             "shipping_refunded" => $order->getData('shipping_refunded'),
             "base_shipping_refunded" => $order->getData('base_shipping_refunded'),
             "shipping_tax_refunded" => $order->getData('shipping_tax_refunded'),
@@ -409,8 +402,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "base_subtotal_refunded" => $order->getData('base_subtotal_refunded'),
             "total_refunded" => $order->getData('total_refunded'),
             "base_total_refunded" => $order->getData('base_total_refunded'),
-
-            // canceled
+            // Canceled details
             "discount_canceled" => $order->getData('discount_canceled'),
             "base_discount_canceled" => $order->getData('base_discount_canceled'),
             "tax_canceled" => $order->getData('tax_canceled'),
@@ -433,14 +425,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     ): array {
         $payment = $order->getPayment();
         $magePaymentMethods = $this->getMagentoPaymentMethods();
-        if (!isset($magePaymentMethods[$payment->getData("method")])) {
-            $paymentTitle = "";
-        } else {
-            $paymentTitle = $magePaymentMethods[$payment->getData("method")];
-        }
-
+        $paymentMethod = $payment->getData("method");
+        $paymentTitle = $magePaymentMethods[$paymentMethod] ?? "";
         return [
-            "payment_method" => $payment->getData("method"),
+            "payment_method" => $paymentMethod,
             "payment_title" => $paymentTitle,
             "cc_last4" => $payment->getData("cc_last4"),
             "cc_exp_year" => $payment->getData("cc_exp_year"),
@@ -459,15 +447,11 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $paymentMethods = [];
         $activePayments = $this->paymentConfig->getActiveMethods();
         foreach ($activePayments as $paymentCode => $paymentModel) {
-            $paymentTitle = $this->scopeConfig->getValue(
-                'payment/' . $paymentCode . '/title'
-            );
-            if (!$paymentTitle) {
-                continue;
+            $paymentTitle = $this->scopeConfig->getValue("payment/$paymentCode/title");
+            if ($paymentTitle) {
+                $paymentMethods[$paymentCode] = $paymentTitle;
             }
-            $paymentMethods[$paymentCode] = $paymentTitle;
         }
-
         return $paymentMethods;
     }
 
@@ -485,32 +469,15 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         if (!$shippingAddress) {
             $shippingAddress = $billingAddress;
         }
-
         return [
-            "firstname" => $this->formatText(
-                (string) $shippingAddress->getData("firstname")
-            ),
-            "lastname" => $this->formatText(
-                (string) $shippingAddress->getData("lastname")
-            ),
-            "company" => $this->formatText(
-                (string) $shippingAddress->getData("company")
-            ),
-            "street" => $this->formatText(
-                (string) $shippingAddress->getData("street")
-            ),
-            "city" => $this->formatText(
-                (string) $shippingAddress->getData("city")
-            ),
-            "region_id" => $this->formatText(
-                (string) $shippingAddress->getData("region_id")
-            ),
-            "country_id" => $this->formatText(
-                (string) $shippingAddress->getData("country_id")
-            ),
-            "region" => $this->formatText(
-                (string) $shippingAddress->getData("region")
-            ),
+            "firstname" => $shippingAddress->getData("firstname"),
+            "lastname" => $shippingAddress->getData("lastname"),
+            "company" => $shippingAddress->getData("company"),
+            "street" => $shippingAddress->getData("street"),
+            "city" => $shippingAddress->getData("city"),
+            "region_id" => $shippingAddress->getData("region_id"),
+            "country_id" => $shippingAddress->getData("country_id"),
+            "region" => $shippingAddress->getData("region"),
             "postcode" => $shippingAddress->getData("postcode"),
             "telephone" => $shippingAddress->getData("telephone"),
             "shipping_method" => $order->getShippingMethod(),
@@ -528,12 +495,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         $shipmentInfo = [];
-        $shipments = $order->getShipmentsCollection();
-        foreach ($shipments as $shipment) {
-            // shipment item
+        foreach ($order->getShipmentsCollection() as $shipment) {
             $itemsData = [];
-            $shipmentItems = $shipment->getItemsCollection();
-            foreach ($shipmentItems as $shipmentItem) {
+            foreach ($shipment->getItemsCollection() as $shipmentItem) {
                 $itemsData[] = [
                     "sku" => $shipmentItem->getData("sku"),
                     "name" => $shipmentItem->getData("name"),
@@ -542,10 +506,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     "weight" => $shipmentItem->getData("weight")
                 ];
             }
-            // track info
             $tracksData = [];
-            $shipmentTracks = $shipment->getTracksCollection();
-            foreach ($shipmentTracks as $shipmentTrack) {
+            foreach ($shipment->getTracksCollection() as $shipmentTrack) {
                 $tracksData[] = [
                     "created_at" => $shipmentTrack->getData("created_at"),
                     "updated_at" => $shipmentTrack->getData("updated_at"),
@@ -554,7 +516,6 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     "track_number" => $shipmentTrack->getData("track_number")
                 ];
             }
-
             $shipmentInfo[] = [
                 "created_at" => $shipment->getData("created_at"),
                 "updated_at" => $shipment->getData("updated_at"),
@@ -582,12 +543,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         $refundInfo = [];
-        $refunds = $order->getCreditmemosCollection();
-        foreach ($refunds as $refund) {
-            // refund item
+        foreach ($order->getCreditmemosCollection() as $refund) {
             $itemsData = [];
-            $refundItems = $refund->getAllItems();
-            foreach ($refundItems as $refundItem) {
+            foreach ($refund->getAllItems() as $refundItem) {
                 $itemsData[] = [
                     "sku" => $refundItem->getData("sku"),
                     "name" => $refundItem->getData("name"),
@@ -606,17 +564,14 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     "base_row_total_incl_tax" => $refundItem->getData("base_row_total_incl_tax"),
                 ];
             }
-            // comment info
             $commentsData = [];
-            $refundComments = $refund->getCommentsCollection();
-            foreach ($refundComments as $refundComment) {
+            foreach ($refund->getCommentsCollection() as $refundComment) {
                 $commentsData[] = [
                     "created_at" => $refundComment->getData("created_at"),
                     "comment" => $refundComment->getData("comment"),
                     "is_customer_notified" => $refundComment->getData("is_customer_notified")
                 ];
             }
-
             $refundInfo[] = [
                 "created_at" => $refund->getData("created_at"),
                 "updated_at" => $refund->getData("updated_at"),
@@ -636,7 +591,6 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 "comment_info" => $commentsData
             ];
         }
-
         return $refundInfo;
     }
 
@@ -650,30 +604,14 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         return [
-            "firstname" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("firstname")
-            ),
-            "lastname" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("lastname")
-            ),
-            "company" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("company")
-            ),
-            "street" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("street")
-            ),
-            "city" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("city")
-            ),
-            "region_id" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("region_id")
-            ),
-            "country_id" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("country_id")
-            ),
-            "region" => $this->formatText(
-                (string) $order->getBillingAddress()->getData("region")
-            ),
+            "firstname" => $order->getBillingAddress()->getData("firstname"),
+            "lastname" => $order->getBillingAddress()->getData("lastname"),
+            "company" => $order->getBillingAddress()->getData("company"),
+            "street" => $order->getBillingAddress()->getData("street"),
+            "city" => $order->getBillingAddress()->getData("city"),
+            "region_id" => $order->getBillingAddress()->getData("region_id"),
+            "country_id" => $order->getBillingAddress()->getData("country_id"),
+            "region" => $order->getBillingAddress()->getData("region"),
             "postcode" => $order->getBillingAddress()->getData("postcode"),
             "telephone" => $order->getBillingAddress()->getData("telephone")
         ];
@@ -689,18 +627,14 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         $histories = [];
-        $statusHistories = $order->getStatusHistories();
-        if (count($statusHistories)) {
-            foreach ($statusHistories as $statusHistory) {
-                $histories[] = [
-                    "comment" => $statusHistory->getData("comment"),
-                    "status" => $statusHistory->getData("status"),
-                    "created_at" => $statusHistory->getData("created_at"),
-                    "entity_name" => $statusHistory->getData("entity_name")
-                ];
-            }
+        foreach ($order->getStatusHistories() as $statusHistory) {
+            $histories[] = [
+                "comment" => $statusHistory->getData("comment"),
+                "status" => $statusHistory->getData("status"),
+                "created_at" => $statusHistory->getData("created_at"),
+                "entity_name" => $statusHistory->getData("entity_name")
+            ];
         }
-
         return $histories;
     }
 
@@ -715,7 +649,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     ): array {
         return [
             "sku" => $this->getItemSku($item),
-            "name" => $this->formatText((string) $item->getName()),
+            "name" => $item->getName(),
             "qty_ordered" => (int) $item->getQtyOrdered(),
             "qty_invoiced" => (int) $item->getQtyInvoiced(),
             "qty_shipped" => (int) $item->getQtyShipped(),
@@ -741,22 +675,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "discount_percent" => $item->getDiscountPercent(),
             "has_parent_item" => $this->getChildInfo($item),
             "product_options" => $this->serializer->serialize(
-                $item->getdata('product_options')
+                $item->getData('product_options')
             )
         ];
-    }
-
-    /**
-     * Format text
-     *
-     * @param string $string
-     * @return string
-     */
-    public function formatText(string $string): string
-    {
-        $string = str_replace(',', ' ', (string) $string);
-
-        return $string;
     }
 
     /**
@@ -768,15 +689,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getInvoiceDate(
         \Magento\Sales\Model\Order $order
     ): string {
-        $date = '';
-        $collection = $order->getInvoiceCollection();
-        if (count($collection)) {
-            foreach ($collection as $data) {
-                $date = $data->getData('created_at');
-            }
-        }
-
-        return $date;
+        return $this->getFirstItemCreatedAt($order->getInvoiceCollection());
     }
 
     /**
@@ -788,15 +701,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getShipmentDate(
         \Magento\Sales\Model\Order $order
     ): string {
-        $date = '';
-        $collection = $order->getShipmentsCollection();
-        if (count($collection)) {
-            foreach ($collection as $data) {
-                $date = $data->getData('created_at');
-            }
-        }
-
-        return $date;
+        return $this->getFirstItemCreatedAt($order->getShipmentsCollection());
     }
 
     /**
@@ -808,15 +713,22 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getCreditMemoDate(
         \Magento\Sales\Model\Order $order
     ): string {
-        $date = '';
-        $collection = $order->getCreditmemosCollection();
-        if (count($collection)) {
-            foreach ($collection as $data) {
-                $date = $data->getData('created_at');
-            }
-        }
+        return $this->getFirstItemCreatedAt($order->getCreditmemosCollection());
+    }
 
-        return $date;
+    /**
+     * Get the creation date from the first item of a given collection
+     *
+     * @param \Magento\Framework\Data\Collection\AbstractDb $collection
+     * @return string
+     */
+    public function getFirstItemCreatedAt(
+        \Magento\Framework\Data\Collection\AbstractDb $collection
+    ): string {
+        $firstItem = $collection->getFirstItem();
+        return $firstItem && $firstItem->getData('created_at')
+            ? $firstItem->getData('created_at')
+            : '';
     }
 
     /**
@@ -828,11 +740,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getItemSku(
         \Magento\Sales\Model\Order\Item $item
     ): string {
-        if ($item->getProductType() == 'configurable') {
-            return (string) $item->getProductOptionByCode('simple_sku');
-        }
-
-        return $item->getSku();
+        return $item->getProductType() === 'configurable'
+            ? (string) $item->getProductOptionByCode('simple_sku')
+            : $item->getSku();
     }
 
     /**
@@ -844,11 +754,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getChildInfo(
         \Magento\Sales\Model\Order\Item $item
     ): string {
-        if ($item->getParentItemId()) {
-            return 'yes';
-        } else {
-            return 'no';
-        }
+        return $item->getParentItemId() ? 'yes' : 'no';
     }
 
     /**
@@ -861,15 +767,11 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $paymentMethodArray = [];
         $payments = $this->paymentConfig->getActiveMethods();
         foreach ($payments as $paymentCode => $paymentModel) {
-            $paymentTitle = $this->scopeConfig->getValue(
-                'payment/' . $paymentCode . '/title'
-            );
-            if (!$paymentTitle) {
-                continue;
+            $paymentTitle = $this->scopeConfig->getValue("payment/$paymentCode/title");
+            if ($paymentTitle) {
+                $paymentMethodArray[] = [$paymentCode => $paymentTitle];
             }
-            $paymentMethodArray[][$paymentCode] = $paymentTitle;
         }
-
         return $paymentMethodArray;
     }
 
@@ -883,25 +785,22 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $shipMethods = [];
         $activeCarriers = $this->shippingConfig->getActiveCarriers();
         foreach ($activeCarriers as $carrierCode => $carrierModel) {
-            $carrierTitle = $this->scopeConfig->getValue(
-                'carriers/' . $carrierCode . '/title'
-            );
+            $carrierTitle = $this->scopeConfig->getValue("carriers/$carrierCode/title");
             $carrierMethods = $carrierModel->getAllowedMethods();
             if ($carrierMethods) {
                 foreach ($carrierMethods as $methodCode => $methodLabel) {
                     if (is_array($methodLabel)) {
                         foreach ($methodLabel as $methodLabelKey => $methodLabelValue) {
-                            $shipMethods[][$methodLabelKey] = $methodLabelValue;
+                            $shipMethods[] = [$methodLabelKey => $methodLabelValue];
                         }
                     } else {
                         $shipMethod = $carrierCode . "_" . $methodCode;
                         $shipMethodTitle = $carrierTitle . " - " . $methodLabel;
-                        $shipMethods[][$shipMethod] = $shipMethodTitle;
+                        $shipMethods[] = [$shipMethod => $shipMethodTitle];
                     }
                 }
             }
         }
-
         return $shipMethods;
     }
 
@@ -913,16 +812,15 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getShippingCarriers(): array
     {
         $storeId = 0;
-        $carriers = [];
-        $carriers[]["custom"] = __("Custom Value");
-        // get all system carriers
+        $carriers = [
+            ["custom" => __("Custom Value")]
+        ];
         $carrierInstances = $this->shippingConfig->getAllCarriers($storeId);
         foreach ($carrierInstances as $code => $carrier) {
             if ($carrier->isTrackingAvailable()) {
-                $carriers[][$code] = $carrier->getConfigData("title");
+                $carriers[] = [$code => $carrier->getConfigData("title")];
             }
         }
-
         return $carriers;
     }
 }
