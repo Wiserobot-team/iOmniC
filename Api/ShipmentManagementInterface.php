@@ -34,6 +34,22 @@ interface ShipmentManagementInterface
     ): array;
 
     /**
+     * Get Shipment by ID
+     *
+     * @param int $shipmentId
+     * @return array
+     */
+    public function getById(int $shipmentId): array;
+
+    /**
+     * Get Shipment by increment ID
+     *
+     * @param string $incrementId
+     * @return array
+     */
+    public function getByIncrementId(string $incrementId): array;
+
+    /**
      * Create or update Shipment
      *
      * @param string $orderId

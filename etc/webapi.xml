@@ -70,6 +70,18 @@
             <resource ref="self"/>
         </resources>
     </route>
+    <route url="/V1/io/shipments/:shipmentId" method="GET">
+        <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="getById" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/shipments/increment-id/:incrementId" method="GET">
+        <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="getByIncrementId" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
     <route url="/V1/io/shipments/import" method="POST">
         <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="import" />
         <resources>

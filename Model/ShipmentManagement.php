@@ -24,6 +24,7 @@ use Magento\Sales\Model\Convert\Order as ConvertOrder;
 use Magento\Sales\Model\Order\ShipmentFactory;
 use Magento\Sales\Model\ResourceModel\Order\Shipment\CollectionFactory as ShipmentCollectionFactory;
 use Magento\Sales\Model\Order\Shipment\TrackFactory as ShipmentTrackFactory;
+use Magento\Sales\Api\ShipmentRepositoryInterface;
 use Magento\Framework\Webapi\Exception as WebapiException;
 
 class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterface
@@ -68,6 +69,10 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      * @var ShipmentTrackFactory
      */
     public $shipmentTrackFactory;
+    /**
+     * @var ShipmentRepositoryInterface
+     */
+    public $shipmentRepository;
 
     /**
      * @param Filesystem $filesystem
@@ -78,6 +83,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      * @param ShipmentFactory $shipmentFactory
      * @param ShipmentCollectionFactory $shipmentCollectionFactory
      * @param ShipmentTrackFactory $shipmentTrackFactory
+     * @param ShipmentRepositoryInterface $shipmentRepository
      */
     public function __construct(
         Filesystem $filesystem,
@@ -87,7 +93,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         ConvertOrder $convertOrder,
         ShipmentFactory $shipmentFactory,
         ShipmentCollectionFactory $shipmentCollectionFactory,
-        ShipmentTrackFactory $shipmentTrackFactory
+        ShipmentTrackFactory $shipmentTrackFactory,
+        ShipmentRepositoryInterface $shipmentRepository
     ) {
         $this->filesystem = $filesystem;
         $this->resourceConnection = $resourceConnection;
@@ -97,6 +104,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         $this->shipmentFactory = $shipmentFactory;
         $this->shipmentCollectionFactory = $shipmentCollectionFactory;
         $this->shipmentTrackFactory = $shipmentTrackFactory;
+        $this->shipmentRepository = $shipmentRepository;
     }
 
     /**
@@ -119,19 +127,53 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         $this->applyFilter($shipmentCollection, $filter);
         $this->applySortingAndPaging($shipmentCollection, $page, $limit);
         $result = [];
-        if ($shipmentCollection->getSize()) {
-            $storeName = $storeInfo->getName();
-            foreach ($shipmentCollection as $shipment) {
-                $shipmentIId = $shipment->getIncrementId();
-                if ($shipmentIId) {
-                    $shipmentData = $this->formatShipmentData($shipment, $storeName);
-                    if ($shipmentData) {
-                        $result[$shipmentIId] = $shipmentData;
-                    }
+        $storeName = $storeInfo->getName();
+        foreach ($shipmentCollection as $shipment) {
+            $shipmentIId = $shipment->getIncrementId();
+            if ($shipmentIId) {
+                $shipmentData = $this->formatShipmentData($shipment);
+                if (!empty($shipmentData)) {
+                    $result[$shipmentIId] = array_merge(['store' => $storeName], $shipmentData);
                 }
             }
         }
         return $result;
+    }
+
+    /**
+     * Get Shipment by ID
+     *
+     * @param int $shipmentId
+     * @return array
+     */
+    public function getById(int $shipmentId): array
+    {
+        try {
+            $shipment = $this->shipmentRepository->get($shipmentId);
+            $shipmentData = $this->formatShipmentData($shipment);
+            return !empty($shipmentData) ? [$shipmentId => $shipmentData] : [];
+        } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Get Shipment by increment ID
+     *
+     * @param string $incrementId
+     * @return array
+     */
+    public function getByIncrementId(string $incrementId): array
+    {
+        $shipmentCollection = $this->shipmentCollectionFactory->create()
+            ->addFieldToFilter('increment_id', $incrementId)
+            ->setPageSize(1);
+        $shipment = $shipmentCollection->getFirstItem();
+        if (!$shipment->getId()) {
+            return [];
+        }
+        $shipmentData = $this->formatShipmentData($shipment);
+        return !empty($shipmentData) ? [$incrementId => $shipmentData] : [];
     }
 
     /**
@@ -265,21 +307,13 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      * Get Shipment Data
      *
      * @param \Magento\Sales\Model\Order\Shipment $shipment
-     * @param string $storeName
      * @return array
      */
     public function formatShipmentData(
-        \Magento\Sales\Model\Order\Shipment $shipment,
-        string $storeName
+        \Magento\Sales\Model\Order\Shipment $shipment
     ): array {
-        $shipmentData = [
-            'store' => $storeName
-        ];
         $shipmentInfo = $this->getShipmentInfo($shipment);
-        if (!empty($shipmentInfo)) {
-            $shipmentData['shipment_info'] = $shipmentInfo;
-        }
-        return $shipmentData;
+        return !empty($shipmentInfo) ? ['shipment_info' => $shipmentInfo] : [];
     }
 
     /**
