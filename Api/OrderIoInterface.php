@@ -34,21 +34,37 @@ interface OrderIoInterface
     ): array;
 
     /**
-     * Get Magento Payment Methods
+     * Get Order by ID
+     *
+     * @param int $orderId
+     * @return array
+     */
+    public function getById(int $orderId): array;
+
+    /**
+     * Get Order by increment ID
+     *
+     * @param string $incrementId
+     * @return array
+     */
+    public function getByIncrementId(string $incrementId): array;
+
+    /**
+     * Get Payment Methods
      *
      * @return array
      */
     public function getPaymentMethods(): array;
 
     /**
-     * Get Magento Shipping Methods
+     * Get Shipping Methods
      *
      * @return array
      */
     public function getShippingMethods(): array;
 
     /**
-     * Get Magento Shipping Carriers
+     * Get Shipping Carriers
      *
      * @return array
      */

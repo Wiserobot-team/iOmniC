@@ -19,6 +19,7 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
+use Magento\Sales\Api\OrderRepositoryInterface;
 use Magento\Payment\Model\Config as PaymentConfig;
 use Magento\Shipping\Model\Config as ShippingConfig;
 use Magento\Framework\App\ResourceConnection;
@@ -48,6 +49,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      */
     public $orderCollectionFactory;
     /**
+     * @var OrderRepositoryInterface
+     */
+    public $orderRepository;
+    /**
      * @var PaymentConfig
      */
     public $paymentConfig;
@@ -69,6 +74,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @param StoreManagerInterface $storeManager
      * @param OrderFactory $orderFactory
      * @param OrderCollectionFactory $orderCollectionFactory
+     * @param OrderRepositoryInterface $orderRepository
      * @param PaymentConfig $paymentConfig
      * @param ShippingConfig $shippingConfig
      * @param ResourceConnection $resourceConnection
@@ -79,6 +85,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         StoreManagerInterface $storeManager,
         OrderFactory $orderFactory,
         OrderCollectionFactory $orderCollectionFactory,
+        OrderRepositoryInterface $orderRepository,
         PaymentConfig $paymentConfig,
         ShippingConfig $shippingConfig,
         ResourceConnection $resourceConnection,
@@ -88,6 +95,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $this->storeManager = $storeManager;
         $this->orderFactory = $orderFactory;
         $this->orderCollectionFactory = $orderCollectionFactory;
+        $this->orderRepository = $orderRepository;
         $this->paymentConfig = $paymentConfig;
         $this->shippingConfig = $shippingConfig;
         $this->resourceConnection = $resourceConnection;
@@ -114,19 +122,50 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $this->applyFilter($orderCollection, $filter);
         $this->applySortingAndPaging($orderCollection, $page, $limit);
         $result = [];
-        if ($orderCollection->getSize()) {
-            $storeName = $storeInfo->getName();
-            foreach ($orderCollection as $order) {
-                $orderIId = $order->getIncrementId();
-                if ($orderIId) {
-                    $orderData = $this->formatOrderData($order, $storeName);
-                    if ($orderData) {
-                        $result[$orderIId] = $orderData;
-                    }
+        $storeName = $storeInfo->getName();
+        foreach ($orderCollection as $order) {
+            $orderIId = $order->getIncrementId();
+            if ($orderIId) {
+                $orderData = $this->formatOrderData($order);
+                if (!empty($orderData)) {
+                    $result[$orderIId] = array_merge(['store' => $storeName], $orderData);
                 }
             }
         }
         return $result;
+    }
+
+    /**
+     * Get Order by ID
+     *
+     * @param int $orderId
+     * @return array
+     */
+    public function getById(int $orderId): array
+    {
+        try {
+            $order = $this->orderRepository->get($orderId);
+            $orderData = $this->formatOrderData($order);
+            return !empty($orderData) ? [$orderId => $orderData] : [];
+        } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Get Order by increment ID
+     *
+     * @param string $incrementId
+     * @return array
+     */
+    public function getByIncrementId(string $incrementId): array
+    {
+        $order = $this->orderFactory->create()->loadByIncrementId($incrementId);
+        if (!$order->getId()) {
+            return [];
+        }
+        $orderData = $this->formatOrderData($order);
+        return !empty($orderData) ? [$incrementId => $orderData] : [];
     }
 
     /**
@@ -272,15 +311,12 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * Get Order Data
      *
      * @param \Magento\Sales\Model\Order $order
-     * @param string $storeName
      * @return array
      */
     public function formatOrderData(
-        \Magento\Sales\Model\Order $order,
-        string $storeName
+        \Magento\Sales\Model\Order $order
     ): array {
         $orderData = [
-            'store' => $storeName,
             'order_info' => $this->getOrderInfo($order),
             'payment_info' => $this->getPaymentInfo($order),
             'shipping_info' => $this->getShippingInfo($order),
