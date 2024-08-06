@@ -114,104 +114,130 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         int $page = 1,
         int $limit = 1000
     ): array {
-        // create shipment collection
-        $shipmentCollection = $this->shipmentCollectionFactory->create();
-        $errorMess = "data request error";
-
-        // store info
-        if (!$store) {
-            $message = "Field: 'store' is a required field";
-            $this->results["error"] = $message;
-            throw new WebapiException(__($errorMess), 0, 400, $this->results);
+        $storeInfo = $this->getStoreInfo($store);
+        $shipmentCollection = $this->createShipmentCollection($store);
+        $this->applyFilter($shipmentCollection, $filter);
+        $this->applySortingAndPaging($shipmentCollection, $page, $limit);
+        $result = [];
+        if ($shipmentCollection->getSize()) {
+            $storeName = $storeInfo->getName();
+            foreach ($shipmentCollection as $shipment) {
+                $shipmentIId = $shipment->getIncrementId();
+                if ($shipmentIId) {
+                    $shipmentData = $this->formatShipmentData($shipment, $storeName);
+                    if ($shipmentData) {
+                        $result[$shipmentIId] = $shipmentData;
+                    }
+                }
+            }
         }
+        return $result;
+    }
+
+    /**
+     * Get store information
+     *
+     * @param int $store
+     * @return \Magento\Store\Model\Store
+     */
+    public function getStoreInfo(
+        int $store
+    ): \Magento\Store\Model\Store {
         try {
-            $storeInfo = $this->storeManager->getStore($store);
+            return $this->storeManager->getStore($store);
         } catch (\Exception $e) {
-            $message = "Requested 'store' " . $store . " doesn't exist";
+            $message = "Requested 'store' {$store} doesn't exist";
             $this->results["error"] = $message;
-            throw new WebapiException(__($errorMess), 0, 400, $this->results);
+            throw new WebapiException(__("data request error"), 0, 400, $this->results);
         }
-        $shipmentCollection->addFieldToFilter('store_id', $store);
+    }
 
-        // selecting
-        $shipmentCollection->addFieldToSelect('*');
+    /**
+     * Create shipment collection with basic filters
+     *
+     * @param int $store
+     * @return \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection
+     */
+    public function createShipmentCollection(
+        int $store
+    ): \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection {
+        $shipmentCollection = $this->shipmentCollectionFactory->create();
+        $shipmentCollection->addFieldToFilter('main_table.store_id', $store)
+            ->addFieldToSelect('*')
+            ->getSelect()
+            ->distinct(true)
+            ->joinLeft(
+                ['shipment_track' => $this->resourceConnection->getTableName('sales_shipment_track')],
+                'main_table.entity_id = shipment_track.parent_id',
+                ['shipment_track_updated_at' => 'shipment_track.updated_at']
+            )
+            ->group('main_table.entity_id');
+        return $shipmentCollection;
+    }
 
-        // filtering
+    /**
+     * Apply sorting and paging to the shipment collection
+     *
+     * @param \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection $shipmentCollection
+     * @param int $page
+     * @param int $limit
+     */
+    public function applySortingAndPaging(
+        \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection $shipmentCollection,
+        int $page,
+        int $limit
+    ): void {
+        $shipmentCollection->setOrder('entity_id', 'asc')
+            ->setPageSize(min(max(1, (int) $limit), 1000))
+            ->setCurPage(max(1, (int) $page));
+    }
+
+    /**
+     * Apply filters to the shipment collection
+     *
+     * @param \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection $shipmentCollection
+     * @param string $filter
+     */
+    public function applyFilter(
+        \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection $shipmentCollection,
+        string $filter
+    ): void {
         $filter = trim((string) $filter);
-        if ($filter) {
-            $filterArray = explode(" and ", (string) $filter);
-            foreach ($filterArray as $filterItem) {
-                $operator = $this->processFilter((string) $filterItem);
-                if (!$operator) {
-                    continue;
-                }
-                $condition = array_map('trim', explode($operator, (string) $filterItem));
-                if (count($condition) != 2) {
-                    continue;
-                }
-                if (!$condition[0] || !$condition[1]) {
-                    continue;
-                }
-                $fieldName = $condition[0];
-                $fieldValue = $condition[1];
-
-                // check if column doesn't exist in shipment table
-                $tableName = $this->resourceConnection->getTableName(['sales_shipment', '']);
-                if ($this->resourceConnection->getConnection()
-                        ->tableColumnExists($tableName, $fieldName) !== true) {
-                    $message = "Field: 'filter' - column '" .
-                        $fieldName . "' doesn't exist in shipment table";
-                    $this->results["error"] = $message;
-                    throw new WebapiException(__($errorMess), 0, 400, $this->results);
-                }
+        $filterArray = explode(" and ", (string) $filter);
+        $tableName = $this->resourceConnection->getTableName('sales_shipment');
+        $columns = $this->resourceConnection->getConnection()->describeTable($tableName);
+        $columnNames = array_keys($columns);
+        foreach ($filterArray as $filterItem) {
+            $operator = $this->processFilter($filterItem);
+            if (!$operator) {
+                continue;
+            }
+            $condition = array_map('trim', explode($operator, (string) $filterItem));
+            if (count($condition) != 2 || !$condition[0] || !$condition[1]) {
+                continue;
+            }
+            $fieldName = $condition[0];
+            $fieldValue = $condition[1];
+            if (!in_array($fieldName, $columnNames)) {
+                $message = "Field: 'filter' - column '{$fieldName}' doesn't exist in shipment table";
+                $this->results["error"] = $message;
+                throw new WebapiException(__("data request error"), 0, 400, $this->results);
+            }
+            if ($fieldName === "updated_at") {
                 $shipmentCollection->addFieldToFilter(
-                    $fieldName,
+                    ['main_table.updated_at', 'shipment_track.updated_at'],
+                    [
+                        [$operator => $fieldValue],
+                        [$operator => $fieldValue]
+                    ]
+                );
+            } else {
+                $shipmentCollection->addFieldToFilter(
+                    'main_table.' . $fieldName,
                     [$operator => $fieldValue]
                 );
             }
         }
-        // sorting
-        $shipmentCollection->setOrder('entity_id', 'asc');
-
-        // paging
-        $total = $shipmentCollection->getSize();
-        if (!$page || $page <= 0) {
-            $page = 1;
-        }
-        if (!$limit || $limit <= 0) {
-            $limit = 100;
-        }
-        if ($limit > 1000) {
-            $limit = 1000; // maximum page size
-        }
-
-        $result = [];
-        $totalPages = ceil($total / $limit);
-        if ($page > $totalPages) {
-            return $result;
-        }
-
-        $shipmentCollection->setPageSize($limit);
-        $shipmentCollection->setCurPage($page);
-        if ($shipmentCollection->getSize()) {
-            foreach ($shipmentCollection as $shipment) {
-                $shipmentIId = $shipment->getIncrementId();
-                if (!$shipmentIId) {
-                    continue;
-                }
-                // shipment info
-                $shipmentData = [];
-                $shipmentData['store'] = $storeInfo->getName();
-                $shipmentInfo = $this->getShipmentInfo($shipment);
-                if (count($shipmentInfo)) {
-                    $shipmentData['shipment_info'] = $shipmentInfo;
-                }
-                $result[$shipmentIId] = $shipmentData;
-            }
-            return $result;
-        }
-
-        return $result;
     }
 
     /**
@@ -222,21 +248,38 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      */
     public function processFilter(string $string): string
     {
-        switch ($string) {
-            case strpos((string) $string, " eq ") == true:
-                $operator = "eq";
-                break;
-            case strpos((string) $string, " gt ") == true:
-                $operator = "gt";
-                break;
-            case strpos((string) $string, " le ") == true:
-                $operator = "le";
-                break;
-            default:
-                $operator = '';
+        $operators = [
+            ' eq ' => 'eq',
+            ' gt ' => 'gt',
+            ' le ' => 'le',
+        ];
+        foreach ($operators as $key => $operator) {
+            if (strpos($string, $key) !== false) {
+                return $operator;
+            }
         }
+        return '';
+    }
 
-        return $operator;
+    /**
+     * Get Shipment Data
+     *
+     * @param \Magento\Sales\Model\Order\Shipment $shipment
+     * @param string $storeName
+     * @return array
+     */
+    public function formatShipmentData(
+        \Magento\Sales\Model\Order\Shipment $shipment,
+        string $storeName
+    ): array {
+        $shipmentData = [
+            'store' => $storeName
+        ];
+        $shipmentInfo = $this->getShipmentInfo($shipment);
+        if (!empty($shipmentInfo)) {
+            $shipmentData['shipment_info'] = $shipmentInfo;
+        }
+        return $shipmentData;
     }
 
     /**
@@ -249,10 +292,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         \Magento\Sales\Model\Order\Shipment $shipment
     ): array {
         $shipmentInfo = [];
-        // shipment item
         $itemsData = [];
-        $shipmentItems = $shipment->getItemsCollection();
-        foreach ($shipmentItems as $shipmentItem) {
+        foreach ($shipment->getItemsCollection() as $shipmentItem) {
             $itemsData[] = [
                 "sku" => $shipmentItem->getData("sku"),
                 "name" => $shipmentItem->getData("name"),
@@ -261,10 +302,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
                 "weight" => $shipmentItem->getData("weight")
             ];
         }
-        // track info
         $tracksData = [];
-        $shipmentTracks = $shipment->getTracksCollection();
-        foreach ($shipmentTracks as $shipmentTrack) {
+        foreach ($shipment->getTracksCollection() as $shipmentTrack) {
             $tracksData[] = [
                 "created_at" => $shipmentTrack->getData("created_at"),
                 "updated_at" => $shipmentTrack->getData("updated_at"),
@@ -273,7 +312,6 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
                 "track_number" => $shipmentTrack->getData("track_number")
             ];
         }
-
         $shipmentInfo[] = [
             "created_at" => $shipment->getData("created_at"),
             "updated_at" => $shipment->getData("updated_at"),
@@ -286,7 +324,6 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
             "item_info" => $itemsData,
             "track_info" => $tracksData
         ];
-
         return $shipmentInfo;
     }
 

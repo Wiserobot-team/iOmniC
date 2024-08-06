@@ -240,7 +240,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 );
             } else {
                 $orderCollection->addFieldToFilter(
-                    $fieldName,
+                    'main_table.' . $fieldName,
                     [$operator => $fieldValue]
                 );
             }
@@ -529,7 +529,6 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 "track_info" => $tracksData
             ];
         }
-
         return $shipmentInfo;
     }
 
