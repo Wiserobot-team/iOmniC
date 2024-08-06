@@ -370,61 +370,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      */
     public function import(string $orderId, mixed $shipmentInfo): array
     {
-        // response messages
-        $this->results["response"]["data"]["success"] = [];
-        $this->results["response"]["data"]["error"] = [];
-
-        $errorMess = "data request error";
-
-        // order id
-        if (!$orderId) {
-            $message = "Field: 'order_id' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        // shipment info
-        if (!$shipmentInfo || !count($shipmentInfo)) {
-            $message = "Field: 'shipment_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        foreach ($shipmentInfo as $_shipment) {
-            if (!isset($_shipment["shipping_date"]) || !$_shipment["shipping_date"]
-                || !isset($_shipment["item_info"]) || !count($_shipment["item_info"])
-                || !isset($_shipment["track_info"]) || !count($_shipment["track_info"])) {
-                $message = "Field: 'shipment_info' - incorrect data";
-                $this->results["response"]["data"]["error"][] = $message;
-                $this->log("ERROR: " . $message);
-                $this->cleanResponseMessages();
-                throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-            }
-            foreach ($_shipment["item_info"] as $item) {
-                if (!isset($item["sku"]) || !$item["sku"] || !isset($item["qty"]) || !$item["qty"]) {
-                    $message = "Field: 'item_info' - {'sku','qty'} data fields are required";
-                    $this->results["response"]["data"]["error"][] = $message;
-                    $this->log("ERROR: " . $message);
-                    $this->cleanResponseMessages();
-                    throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-                }
-            }
-            foreach ($_shipment["track_info"] as $track) {
-                if (!isset($track["carrier_code"]) || !$track["carrier_code"] ||
-                    !isset($track["title"]) || !$track["title"]) {
-                    $message = "Field: 'track_info' - {'carrier_code','title'} data fields are required";
-                    $this->results["response"]["data"]["error"][] = $message;
-                    $this->log("ERROR: " . $message);
-                    $this->cleanResponseMessages();
-                    throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-                }
-            }
-        }
-
-        // import io shipment
+        $this->initializeResults();
+        $this->validateShipmentInfo($orderId, $shipmentInfo);
         try {
             $this->importIoShipment($orderId, $shipmentInfo);
             $this->cleanResponseMessages();
@@ -432,6 +379,40 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         } catch (\Exception $e) {
             $errorMess = "shipment import error";
             throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+        }
+    }
+
+    /**
+     * Validate Shipment Info
+     *
+     * @param string $orderId
+     * @param mixed $shipmentInfo
+     * @return void
+     */
+    public function validateShipmentInfo(string $orderId, mixed $shipmentInfo): void
+    {
+        if (empty($orderId)) {
+            $this->addError("Field: 'order_id' is a required field");
+        }
+        if (empty($shipmentInfo) || !is_array($shipmentInfo)) {
+            $this->addError("Field: 'shipment_info' is a required field");
+        }
+        foreach ($shipmentInfo as $_shipment) {
+            if (empty($_shipment["shipping_date"]) || empty($_shipment["item_info"])
+                || !is_array($_shipment["item_info"]) || empty($_shipment["track_info"])
+                || !is_array($_shipment["track_info"])) {
+                $this->addError("Field: 'shipment_info' - incorrect data");
+            }
+            foreach ($_shipment["item_info"] as $item) {
+                if (empty($item["sku"]) || empty($item["qty"])) {
+                    $this->addError("Field: 'item_info' - {'sku','qty'} data fields are required");
+                }
+            }
+            foreach ($_shipment["track_info"] as $track) {
+                if (empty($track["carrier_code"]) || empty($track["title"])) {
+                    $this->addError("Field: 'track_info' - {'carrier_code','title'} data fields are required");
+                }
+            }
         }
     }
 
@@ -444,38 +425,36 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      */
     public function importIoShipment(string $orderId, array $shipmentInfo): bool
     {
-        $order = $this->orderFactory->create()
-            ->loadByIncrementId($orderId);
-        if ($order && $order->getId()) {
-            if ($order->getStatus() == "closed") {
-                $message = "Skip order " . $orderId . " has been closed";
-                $this->results["response"]["data"]["success"][] = $message;
-                $this->log($message);
-                return false;
-            }
-            if ($order->hasShipments()) {
-                $message = "Skip order " . $orderId . " has been shipped";
-                $this->results["response"]["data"]["success"][] = $message;
-                $this->log($message);
-                return false;
-            }
-            try {
-                // create shipment for order
-                $this->createShipment($order, $shipmentInfo);
-                return true;
-            } catch (\Exception $e) {
-                $message = $orderId . ": " . $e->getMessage();
-                $this->results["response"]["data"]["error"][] = $message;
-                $this->log("ERROR " . $message);
-                $this->cleanResponseMessages();
-                throw new WebapiException(__($e->getMessage()), 0, 400);
-            }
-        } else {
-            $message = "WARN cannot load order " . $orderId;
+        $order = $this->orderFactory->create()->loadByIncrementId($orderId);
+        if (!$order || !$order->getId()) {
+            $message = "WARN cannot load order {$orderId}";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log($message);
             return false;
         }
+        if ($order->getStatus() == "closed") {
+            $message = "Skip order {$orderId} has been closed";
+            $this->results["response"]["data"]["success"][] = $message;
+            $this->log($message);
+            return false;
+        }
+        if ($order->hasShipments()) {
+            $message = "Skip order {$orderId} has been shipped";
+            $this->results["response"]["data"]["success"][] = $message;
+            $this->log($message);
+            return false;
+        }
+        try {
+            $this->createShipment($order, $shipmentInfo);
+            return true;
+        } catch (\Exception $e) {
+            $message = "{$orderId}: {$e->getMessage()}";
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log("ERROR {$message}");
+            $this->cleanResponseMessages();
+            throw new WebapiException(__($e->getMessage()), 0, 400);
+        }
+        return false;
     }
 
     /**
@@ -483,106 +462,111 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      *
      * @param \Magento\Sales\Model\Order $order
      * @param array $shipmentInfo
-     * @return bool
+     * @return void
      */
     public function createShipment(
         \Magento\Sales\Model\Order $order,
         array $shipmentInfo
-    ): bool {
-        $orderId = $order->getIncrementId();
-        if ($order->hasShipments()) {
-            $message = "Skip order " . $orderId . " for already has shipment";
-            $this->results["response"]["data"]["success"][] = $message;
-            $this->log($message);
-            return false;
-        }
-
-        // create shipment
+    ): void {
         foreach ($shipmentInfo as $_shipmentInfo) {
             try {
-                // shipping date
-                if (!$_shipmentInfo["shipping_date"]) {
-                    continue;
-                }
-                // item info
-                if (!isset($_shipmentInfo["item_info"]) || !count($_shipmentInfo["item_info"]) ||
-                    !isset($_shipmentInfo["item_info"][0])) {
-                    continue;
-                }
-                $hasItem = false;
-                foreach ($_shipmentInfo["item_info"] as $itemInfo) {
-                    if (!$itemInfo["sku"] || !$itemInfo["qty"]) {
-                        continue;
-                    }
-                    $hasItem = true;
-                }
-                if (!$hasItem) {
-                    continue;
-                }
-                // track info
-                if (!isset($_shipmentInfo["track_info"]) || !count($_shipmentInfo["track_info"]) ||
-                    !isset($_shipmentInfo["track_info"][0])) {
-                    continue;
-                }
-                $trackInfo = $_shipmentInfo["track_info"][0];
-                if (!$trackInfo["carrier_code"] || !$trackInfo["title"]) {
-                    continue;
-                }
-                if (!isset($trackInfo["track_number"])) {
-                    $trackingNumber = "N/A";
-                } else {
-                    $trackingNumber = $trackInfo["track_number"];
-                    if (!$trackingNumber) {
-                        $trackingNumber = "N/A";
-                    }
-                }
-
-                $carrierCode = $trackInfo["carrier_code"];
-                $className = $trackInfo["title"];
-                $shippingDate = $_shipmentInfo["shipping_date"];
-
-                $trackingDetail = [
-                    "carrier_code" => $carrierCode,
-                    "title" => $className,
-                    "number" => $trackingNumber,
-                    "created_at" => $shippingDate
-                ];
-
-                $convertOrder = $this->convertOrder;
-                $shipment = $convertOrder->toShipment($order);
-                $shipment->setCreatedAt($shippingDate);
-
-                foreach ($order->getAllItems() as $orderItem) {
-                    if (!$orderItem->getQtyToShip() || $orderItem->getIsVirtual()) {
-                        continue;
-                    }
-                    foreach ($_shipmentInfo["item_info"] as $itemInfo) {
-                        if ($itemInfo["sku"] == $orderItem->getSku()) {
-                            $qtyShipped = (int) $itemInfo["qty"];
-                            $shipmentItem = $convertOrder->itemToShipmentItem($orderItem)
-                                ->setQty($qtyShipped);
-                            $shipment->addItem($shipmentItem);
-                        }
-                    }
-                }
-
-                $track = $this->shipmentTrackFactory->create()
-                    ->addData($trackingDetail);
-                $shipment->addTrack($track);
+                $shipment = $this->convertOrder->toShipment($order);
+                $shipment->setCreatedAt($_shipmentInfo["shipping_date"]);
+                $this->addShipmentItems($order, $shipment, $_shipmentInfo["item_info"]);
+                $this->addShipmentTrack($shipment, $_shipmentInfo["track_info"][0]);
                 $shipment->register();
                 $shipment->getOrder()->setIsInProcess(true);
                 $shipment->save();
                 $shipment->getOrder()->save();
                 $shipmentId = $shipment->getIncrementId();
-                $message = "Shipment '" . $shipmentId . "' imported for order " . $orderId;
+                $message = "Shipment '{$shipmentId}' imported for order {$order->getIncrementId()}";
                 $this->results["response"]["data"]["success"][] = $message;
                 $this->log($message);
             } catch (\Exception $e) {
                 throw new WebapiException(__("create shipment " . $e->getMessage()), 0, 400);
             }
         }
+    }
 
-        return false;
+    /**
+     * Add Shipment Items
+     *
+     * @param \Magento\Sales\Model\Order $order
+     * @param \Magento\Sales\Model\Order\Shipment $shipment
+     * @param array $itemInfo
+     * @return void
+     */
+    public function addShipmentItems(
+        \Magento\Sales\Model\Order $order,
+        \Magento\Sales\Model\Order\Shipment $shipment,
+        array $itemInfo
+    ): void {
+        foreach ($order->getAllItems() as $orderItem) {
+            if (!$orderItem->getQtyToShip() || $orderItem->getIsVirtual()) {
+                continue;
+            }
+            foreach ($itemInfo as $item) {
+                if ($item["sku"] == $orderItem->getSku()) {
+                    $qtyShipped = (int) $item["qty"];
+                    $shipmentItem = $this->convertOrder->itemToShipmentItem($orderItem)
+                        ->setQty($qtyShipped);
+                    $shipment->addItem($shipmentItem);
+                }
+            }
+        }
+    }
+
+    /**
+     * Add Shipment Track
+     *
+     * @param \Magento\Sales\Model\Order\Shipment $shipment
+     * @param array $trackInfo
+     * @return void
+     */
+    public function addShipmentTrack(
+        \Magento\Sales\Model\Order\Shipment $shipment,
+        array $trackInfo
+    ): void {
+        $trackingDetail = [
+            "carrier_code" => $trackInfo["carrier_code"],
+            "title" => $trackInfo["title"],
+            "number" => $trackInfo["track_number"] ?? "N/A",
+            "created_at" => $shipment->getCreatedAt()
+        ];
+        $shipmentTrack = $this->shipmentTrackFactory->create()->addData($trackingDetail);
+        $shipment->addTrack($shipmentTrack);
+    }
+
+    /**
+     * Initialize results structure
+     *
+     * @return void
+     */
+    private function initializeResults(): void
+    {
+        $this->results = [
+            "response" => [
+                "data" => [
+                    "success" => [],
+                    "error" => []
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Add error message
+     *
+     * @param string $message
+     * @return void
+     */
+    public function addError(string $message): void
+    {
+        $errorMess = "data request error";
+        $this->results["response"]["data"]["error"][] = $message;
+        $this->log("ERROR {$message}");
+        $this->cleanResponseMessages();
+        throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
     }
 
     /**

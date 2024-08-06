@@ -49,7 +49,5 @@ interface OrderManagementInterface
      * @param string $orderId
      * @return array
      */
-    public function cancel(
-        string $orderId
-    ): array;
+    public function cancel(string $orderId): array;
 }
