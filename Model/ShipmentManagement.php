@@ -193,7 +193,9 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         try {
             return $this->storeManager->getStore($store);
         } catch (\Exception $e) {
-            $this->addMessageAndLog("Requested 'store' {$store} doesn't exist", "error", 0);
+            $message = "Requested 'store' {$store} doesn't exist";
+            $this->results["error"] = $message;
+            throw new WebapiException(__($message), 0, 400, $this->results);
         }
     }
 
@@ -266,7 +268,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
             if (!in_array($fieldName, $columnNames)) {
                 $message = "Field: 'filter' - column '{$fieldName}' doesn't exist in shipment table";
                 $this->results["error"] = $message;
-                throw new WebapiException(__("data request error"), 0, 400, $this->results);
+                throw new WebapiException(__($message), 0, 400, $this->results);
             }
             if ($fieldName === "updated_at") {
                 $shipmentCollection->addFieldToFilter(

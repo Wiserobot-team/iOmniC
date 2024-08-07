@@ -182,7 +182,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         } catch (\Exception $e) {
             $message = "Requested 'store' {$store} doesn't exist";
             $this->results["error"] = $message;
-            throw new WebapiException(__("data request error"), 0, 400, $this->results);
+            throw new WebapiException(__($message), 0, 400, $this->results);
         }
     }
 
@@ -265,7 +265,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             if (!in_array($fieldName, $columnNames)) {
                 $message = "Field: 'filter' - column '{$fieldName}' doesn't exist in order table";
                 $this->results["error"] = $message;
-                throw new WebapiException(__("data request error"), 0, 400, $this->results);
+                throw new WebapiException(__($message), 0, 400, $this->results);
             }
             if ($fieldName === "updated_at") {
                 $orderCollection->addFieldToFilter(

@@ -20,12 +20,12 @@ interface RefundManagementInterface
     /**
      * Create Refund
      *
-     * @param string $incrementId
+     * @param string $orderId
      * @param mixed $refundInfo
      * @return array
      */
     public function import(
-        string $incrementId,
+        string $orderId,
         mixed $refundInfo
     ): array;
 }
