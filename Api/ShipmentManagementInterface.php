@@ -52,12 +52,12 @@ interface ShipmentManagementInterface
     /**
      * Create or update Shipment
      *
-     * @param string $orderId
+     * @param string $incrementId
      * @param mixed $shipmentInfo
      * @return array
      */
     public function import(
-        string $orderId,
+        string $incrementId,
         mixed $shipmentInfo
     ): array;
 }
