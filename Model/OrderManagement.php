@@ -47,6 +47,10 @@ use WiseRobot\Io\Helper\Sku as SkuHelper;
 class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
 {
     /**
+     * @var Zend_Log
+     */
+    public $logger;
+    /**
      * @var string
      */
     public $logFile = "wr_io_order_import.log";
@@ -245,6 +249,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $this->paymentConfig = $paymentConfig;
         $this->ioOrderFactory = $ioOrderFactory;
         $this->skuHelper = $skuHelper;
+        $this->initializeLogger();
     }
 
     /**
@@ -1813,115 +1818,115 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
     }
 
     /**
-     * Cancel Order
+     * Cancel Order by ID
      *
-     * @param string $orderId
+     * @param int $orderId
      * @return array
      */
-    public function cancel(string $orderId): array
+    public function cancelById(int $orderId): array
     {
-        // response messages
-        $this->results["response"]["data"]["success"] = [];
-        $this->results["response"]["data"]["error"] = [];
-
-        $errorMess = "data request error";
-
-        // order id
-        if (!$orderId) {
-            $message = "Field: 'order_id' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        try {
-            $this->cancelOrder($orderId);
-            $this->cleanResponseMessages();
-            return $this->results;
-        } catch (\Exception $e) {
-            $errorMess = "order cancellation error";
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
+        $this->cancelOrder($orderId, "id");
+        $this->cleanResponseMessages();
+        return $this->results;
     }
 
     /**
-     * Cancel the order using the order id
+     * Cancel Order increment ID
      *
-     * @param string $orderId
+     * @param string $incrementId
+     * @return array
+     */
+    public function cancelByIncrementId(string $incrementId): array
+    {
+        $this->cancelOrder($incrementId);
+        $this->cleanResponseMessages();
+        return $this->results;
+    }
+
+    /**
+     * Cancel Order
+     *
+     * @param int|string $id
+     * @param string $typeId
      * @return bool
      */
-    public function cancelOrder(string $orderId): bool
+    public function cancelOrder(int|string $id, string $typeId = 'incrementId'): bool
     {
+        $this->results["response"]["data"]["success"] = [];
+        $this->results["response"]["data"]["error"] = [];
+
+        $typeId === "id"
+        ? $order = $this->orderFactory->create()->load($id)
+        : $order = $this->orderFactory->create()->loadByIncrementId($id);
+        if (!$order || !$order->getId()) {
+            $message = "WARN cannot load order " . $id;
+            $this->results["response"]["data"]["error"][] = $message;
+            $this->log($message);
+            return false;
+        }
+        if ($order->getStatus() == "canceled") {
+            $message = "Skip order " . $id . " has already been canceled";
+            $this->results["response"]["data"]["success"][] = $message;
+            $this->log($message);
+            return true;
+        }
         try {
-            $order = $this->orderFactory->create()
-                ->loadByIncrementId($orderId);
-            if (!$order || !$order->getId()) {
-                $message = "WARN cannot load order " . $orderId;
-                $this->results["response"]["data"]["error"][] = $message;
-                $this->log($message);
-                return false;
-            }
-
-            if ($order->getStatus() == "canceled") {
-                $message = "Skip order " . $orderId . " has been canceled";
-                $this->results["response"]["data"]["success"][] = $message;
-                $this->log($message);
-                return false;
-            }
-
-            // cancel the order
             $order->cancel();
             $order->setData("status", "canceled");
             $order->setData("state", "canceled");
             $order->save();
-
-            $message = "Order " . $orderId . " has been successfully canceled";
+            $message = "Order " . $id . " has been successfully canceled";
             $this->results["response"]["data"]["success"][] = $message;
             $this->log($message);
             return true;
         } catch (\Exception $e) {
-            $message = $orderId . ": " . $e->getMessage();
+            $message = $id . ": " . $e->getMessage();
             $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR " . $message);
+            $this->log("ERROR cancel order " . $message);
             $this->cleanResponseMessages();
             throw new WebapiException(__($e->getMessage()), 0, 400);
         }
-
-        return false;
     }
 
     /**
-     * Clean response messages
+     * Clean response message
      *
      * @return void
      */
     public function cleanResponseMessages(): void
     {
-        if (count($this->results["response"])) {
-            foreach ($this->results["response"] as $key => $value) {
-                if (isset($value["success"]) && !count($value["success"])) {
-                    unset($this->results["response"][$key]["success"]);
+        if (!empty($this->results["response"])) {
+            foreach ($this->results["response"] as $key => &$value) {
+                if (isset($value["success"])) {
+                    $value["success"] = array_unique(array_filter($value["success"]));
+                    if (empty($value["success"])) {
+                        unset($value["success"]);
+                    }
                 }
-                if (isset($value["error"]) && !count($value["error"])) {
-                    unset($this->results["response"][$key]["error"]);
+                if (isset($value["error"])) {
+                    $value["error"] = array_unique(array_filter($value["error"]));
+                    if (empty($value["error"])) {
+                        unset($value["error"]);
+                    }
                 }
-                if (isset($this->results["response"][$key]) &&
-                    !count($this->results["response"][$key])) {
+                if (empty($value)) {
                     unset($this->results["response"][$key]);
-                }
-                if (isset($this->results["response"][$key]["success"]) &&
-                    count($this->results["response"][$key]["success"])) {
-                    $successData = array_unique($this->results["response"][$key]["success"]);
-                    $this->results["response"][$key]["success"] = $successData;
-                }
-                if (isset($this->results["response"][$key]["error"]) &&
-                    count($this->results["response"][$key]["error"])) {
-                    $errorData = array_unique($this->results["response"][$key]["error"]);
-                    $this->results["response"][$key]["error"] = $errorData;
                 }
             }
         }
+    }
+
+    /**
+     * Initialize the logger
+     *
+     * @return void
+     */
+    public function initializeLogger(): void
+    {
+        $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath($this->logFile));
+        $this->logger = new \Zend_Log();
+        $this->logger->addWriter($writer);
     }
 
     /**
@@ -1932,10 +1937,8 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      */
     public function log(string $message): void
     {
-        $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
-        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);
-        $logger = new \Zend_Log();
-        $logger->addWriter($writer);
-        $logger->info($message);
+        if ($this->logger) {
+            $this->logger->info($message);
+        }
     }
 }

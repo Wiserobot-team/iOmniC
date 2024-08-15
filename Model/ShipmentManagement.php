@@ -109,6 +109,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         $this->shipmentCollectionFactory = $shipmentCollectionFactory;
         $this->shipmentTrackFactory = $shipmentTrackFactory;
         $this->shipmentRepository = $shipmentRepository;
+        $this->initializeResults();
         $this->initializeLogger();
     }
 
@@ -375,7 +376,6 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      */
     public function import(string $incrementId, mixed $shipmentInfo): array
     {
-        $this->initializeResults();
         $this->validateShipmentInfo($incrementId, $shipmentInfo);
         $this->importIoShipment($incrementId, $shipmentInfo);
         $this->cleanResponseMessages();
@@ -428,15 +428,14 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         $order = $this->orderFactory->create()->loadByIncrementId($incrementId);
         if (!$order || !$order->getId()) {
             $this->addMessageAndLog("Cannot load order {$incrementId}", "error");
-            return false;
         }
         if ($order->getStatus() == "closed") {
             $this->addMessageAndLog("Order {$incrementId} has been closed", "success");
-            return false;
+            return true;
         }
         if ($order->hasShipments()) {
             $this->addMessageAndLog("Order {$incrementId} has been shipped", "success");
-            return false;
+            return true;
         }
         $this->createShipment($order, $shipmentInfo);
         return true;
@@ -453,16 +452,20 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         \Magento\Sales\Model\Order $order,
         array $shipmentInfo
     ): void {
-        foreach ($shipmentInfo as $_shipmentInfo) {
-            $shipment = $this->convertOrder->toShipment($order);
-            $shipment->setCreatedAt($_shipmentInfo["shipping_date"]);
-            $this->addShipmentItems($order, $shipment, $_shipmentInfo["item_info"]);
-            $this->addShipmentTrack($shipment, $_shipmentInfo["track_info"][0]);
-            $shipment->register();
-            $shipment->getOrder()->setIsInProcess(true);
-            $shipment->save();
-            $shipment->getOrder()->save();
-            $this->addMessageAndLog("Shipment '{$shipment->getIncrementId()}' imported for order {$order->getIncrementId()}", "error");
+        try {
+            foreach ($shipmentInfo as $_shipmentInfo) {
+                $shipment = $this->convertOrder->toShipment($order);
+                $shipment->setCreatedAt($_shipmentInfo["shipping_date"]);
+                $this->addShipmentItems($order, $shipment, $_shipmentInfo["item_info"]);
+                $this->addShipmentTrack($shipment, $_shipmentInfo["track_info"][0]);
+                $shipment->register();
+                $shipment->getOrder()->setIsInProcess(true);
+                $shipment->save();
+                $shipment->getOrder()->save();
+                $this->addMessageAndLog("Shipment '{$shipment->getIncrementId()}' imported for order {$order->getIncrementId()}", "success");
+            }
+        } catch (\Exception $e) {
+            $this->addMessageAndLog("ERROR create shipment {$e->getMessage()}", "error");
         }
     }
 

@@ -70,8 +70,14 @@
             <resource ref="self"/>
         </resources>
     </route>
-    <route url="/V1/io/orders/cancel" method="POST">
-        <service class="WiseRobot\Io\Api\OrderManagementInterface" method="cancel" />
+    <route url="/V1/io/orders/:orderId/cancel" method="POST">
+        <service class="WiseRobot\Io\Api\OrderManagementInterface" method="cancelById" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/orders/increment-id/:incrementId/cancel" method="POST">
+        <service class="WiseRobot\Io\Api\OrderManagementInterface" method="cancelByIncrementId" />
         <resources>
             <resource ref="self"/>
         </resources>

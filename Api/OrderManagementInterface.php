@@ -44,10 +44,18 @@ interface OrderManagementInterface
     ): array;
 
     /**
-     * Cancel Order
+     * Cancel Order by ID
      *
-     * @param string $orderId
+     * @param int $orderId
      * @return array
      */
-    public function cancel(string $orderId): array;
+    public function cancelById(int $orderId): array;
+
+    /**
+     * Cancel Order by increment ID
+     *
+     * @param string $incrementId
+     * @return array
+     */
+    public function cancelByIncrementId(string $incrementId): array;
 }

@@ -61,6 +61,7 @@ class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
         $this->filesystem = $filesystem;
         $this->orderFactory = $orderFactory;
         $this->creditMemoFactory = $creditMemoFactory;
+        $this->initializeResults();
         $this->initializeLogger();
     }
 
@@ -73,7 +74,6 @@ class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
      */
     public function import(string $incrementId, mixed $refundInfo): array
     {
-        $this->initializeResults();
         $this->validateRefundInfo($incrementId, $refundInfo);
         $this->importIoRefund($incrementId, $refundInfo);
         $this->cleanResponseMessages();
@@ -120,19 +120,17 @@ class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
         $order = $this->orderFactory->create()->loadByIncrementId($incrementId);
         if (!$order || !$order->getId()) {
             $this->addMessageAndLog("Cannot load order {$incrementId}", "error");
-            return false;
         }
         if ($order->getStatus() == "closed") {
             $this->addMessageAndLog("Order {$incrementId} has been closed", "success");
-            return false;
+            return true;
         }
         if (!$order->hasInvoices()) {
-            $this->updateOrderStatus($incrementId, 'closed');
-            return false;
+            $this->addMessageAndLog("Order {$incrementId} does not have an invoice", "error");
         }
         if ($order->hasCreditmemos()) {
             $this->addMessageAndLog("Order {$incrementId} has been refunded", 'success');
-            return false;
+            return true;
         }
         $this->createCreditMemo($order, $refundInfo);
         $this->updateOrderStatus($incrementId, 'closed');
@@ -148,12 +146,16 @@ class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
      */
     public function updateOrderStatus(string $incrementId, string $status): void
     {
-        $orderObject = $this->orderFactory->create()->loadByIncrementId($incrementId);
-        if ($orderObject->getId() && $orderObject->getStatus() !== $status) {
-            $orderObject->setData("status", $status);
-            $orderObject->setData("state", $status);
-            $orderObject->save();
-            $this->addMessageAndLog("Order {$incrementId} status set to {$status} success", 'success');
+        try {
+            $orderObject = $this->orderFactory->create()->loadByIncrementId($incrementId);
+            if ($orderObject->getId() && $orderObject->getStatus() !== $status) {
+                $orderObject->setData("status", $status);
+                $orderObject->setData("state", $status);
+                $orderObject->save();
+                $this->addMessageAndLog("Order {$incrementId} status set to {$status} success", 'success');
+            }
+        } catch (\Exception $e) {
+            $this->addMessageAndLog("ERROR set status {$e->getMessage()}", "error");
         }
     }
 
@@ -162,46 +164,48 @@ class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
      *
      * @param \Magento\Sales\Model\Order $order
      * @param array $refundInfo
-     * @return bool
+     * @return void
      */
     public function createCreditMemo(
         \Magento\Sales\Model\Order $order,
         array $refundInfo
-    ): bool {
-        $incrementId = $order->getIncrementId();
-        $shippingRefundedTotal = 0;
-        $shippingTaxRefundedTotal = 0;
-        $taxRefundedTotal = 0;
-        $subtotalRefundedTotal = 0;
-        $totalRefundedTotal = 0;
-        foreach ($refundInfo as $refund) {
-            $refundItems = $this->getRefundItems($order, $refund["item_info"]);
-            if (empty($refundItems)) {
-                $this->addMessageAndLog("Order {$incrementId} items ordered do not match for order", "error");
-                return false;
+    ): void {
+        try {
+            $incrementId = $order->getIncrementId();
+            $shippingRefundedTotal = 0;
+            $shippingTaxRefundedTotal = 0;
+            $taxRefundedTotal = 0;
+            $subtotalRefundedTotal = 0;
+            $totalRefundedTotal = 0;
+            foreach ($refundInfo as $refund) {
+                $refundItems = $this->getRefundItems($order, $refund["item_info"]);
+                if (empty($refundItems)) {
+                    $this->addMessageAndLog("Order {$incrementId} items ordered do not match for order", "error");
+                }
+                $creditMemoData = ['qtys' => $refundItems];
+                $creditMemo = $this->creditMemoFactory->createByOrder($order, $creditMemoData);
+                $creditMemo->save();
+                $this->addMessageAndLog("Credit Memo '{$creditMemo->getIncrementId()}' imported for order {$incrementId}", "success");
+                $shippingRefundedTotal += (float) $creditMemo->getData("base_shipping_amount");
+                $shippingTaxRefundedTotal += (float) $creditMemo->getData("shipping_tax_amount");
+                $taxRefundedTotal += (float) $creditMemo->getData("tax_amount");
+                $subtotalRefundedTotal += (float) $creditMemo->getData("subtotal");
+                $totalRefundedTotal += (float) $creditMemo->getData("base_grand_total");
             }
-            $creditMemoData = ['qtys' => $refundItems];
-            $creditMemo = $this->creditMemoFactory->createByOrder($order, $creditMemoData);
-            $creditMemo->save();
-            $this->addMessageAndLog("Credit Memo '{$creditMemo->getIncrementId()}' imported for order {$incrementId}", "success");
-            $shippingRefundedTotal += (float) $creditMemo->getData("base_shipping_amount");
-            $shippingTaxRefundedTotal += (float) $creditMemo->getData("shipping_tax_amount");
-            $taxRefundedTotal += (float) $creditMemo->getData("tax_amount");
-            $subtotalRefundedTotal += (float) $creditMemo->getData("subtotal");
-            $totalRefundedTotal += (float) $creditMemo->getData("base_grand_total");
+            // Update refunded data for order
+            $order->setData("shipping_refunded", $shippingRefundedTotal);
+            $order->setData("base_shipping_refunded", $shippingRefundedTotal);
+            $order->setData("shipping_tax_refunded", $shippingTaxRefundedTotal);
+            $order->setData("tax_refunded", $taxRefundedTotal);
+            $order->setData("base_tax_refunded", $taxRefundedTotal);
+            $order->setData("subtotal_refunded", $subtotalRefundedTotal);
+            $order->setData("base_subtotal_refunded", $subtotalRefundedTotal);
+            $order->setData("total_refunded", $totalRefundedTotal);
+            $order->setData("base_total_refunded", $totalRefundedTotal);
+            $order->save();
+        } catch (\Exception $e) {
+            $this->addMessageAndLog("ERROR create credit memo {$e->getMessage()}", "error");
         }
-        // Update refunded data for order
-        $order->setData("shipping_refunded", $shippingRefundedTotal);
-        $order->setData("base_shipping_refunded", $shippingRefundedTotal);
-        $order->setData("shipping_tax_refunded", $shippingTaxRefundedTotal);
-        $order->setData("tax_refunded", $taxRefundedTotal);
-        $order->setData("base_tax_refunded", $taxRefundedTotal);
-        $order->setData("subtotal_refunded", $subtotalRefundedTotal);
-        $order->setData("base_subtotal_refunded", $subtotalRefundedTotal);
-        $order->setData("total_refunded", $totalRefundedTotal);
-        $order->setData("base_total_refunded", $totalRefundedTotal);
-        $order->save();
-        return true;
     }
 
     /**

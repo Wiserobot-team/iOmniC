@@ -143,13 +143,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      */
     public function getById(int $orderId): array
     {
-        try {
-            $order = $this->orderRepository->get($orderId);
-            $orderData = $this->formatOrderData($order);
-            return !empty($orderData) ? [$orderId => $orderData] : [];
-        } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
-            return [];
-        }
+        return $this->getOrder($orderId, 'id');
     }
 
     /**
@@ -160,12 +154,26 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      */
     public function getByIncrementId(string $incrementId): array
     {
-        $order = $this->orderFactory->create()->loadByIncrementId($incrementId);
-        if (!$order->getId()) {
+        return $this->getOrder($incrementId);
+    }
+
+    /**
+     * Get Order
+     *
+     * @param int|string $id
+     * @param string $typeId
+     * @return array
+     */
+    public function getOrder(int|string $id, string $typeId = 'incrementId'): array
+    {
+        $typeId === "id"
+        ? $order = $this->orderFactory->create()->load($id)
+        : $order = $this->orderFactory->create()->loadByIncrementId($id);
+        if (!$order || !$order->getId()) {
             return [];
         }
         $orderData = $this->formatOrderData($order);
-        return !empty($orderData) ? [$incrementId => $orderData] : [];
+        return !empty($orderData) ? [$id => $orderData] : [];
     }
 
     /**
