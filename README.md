@@ -13,7 +13,7 @@ Granular integration controls
 Run the command below to install via Composer
 
 ```shell
-composer config github-oauth.github.com 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
+composer config github-oauth.github.com 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
 composer require wiserobot/module-iomnic
 ```
 
