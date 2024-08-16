@@ -1859,13 +1859,13 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         ? $order = $this->orderFactory->create()->load($id)
         : $order = $this->orderFactory->create()->loadByIncrementId($id);
         if (!$order || !$order->getId()) {
-            $message = "WARN cannot load order " . $id;
+            $message = "Cannot load order <{$id}>";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log($message);
             return false;
         }
         if ($order->getStatus() == "canceled") {
-            $message = "Skip order " . $id . " has already been canceled";
+            $message = "Order <{$id}> has already been canceled";
             $this->results["response"]["data"]["success"][] = $message;
             $this->log($message);
             return true;
@@ -1875,16 +1875,16 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             $order->setData("status", "canceled");
             $order->setData("state", "canceled");
             $order->save();
-            $message = "Order " . $id . " has been successfully canceled";
+            $message = "Order <{$id}> has been successfully canceled";
             $this->results["response"]["data"]["success"][] = $message;
             $this->log($message);
             return true;
         } catch (\Exception $e) {
-            $message = $id . ": " . $e->getMessage();
+            $message = "ERROR cancel order <{$id}>: " . $e->getMessage();
             $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR cancel order " . $message);
+            $this->log($message);
             $this->cleanResponseMessages();
-            throw new WebapiException(__($e->getMessage()), 0, 400);
+            throw new WebapiException(__($message), 0, 400);
         }
     }
 
