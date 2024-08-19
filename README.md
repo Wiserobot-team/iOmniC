@@ -18,7 +18,7 @@ composer require wiserobot/module-iomnic
 
 ## Enable module
 
-You have to enable module
+To enable the module do the following
 
 ```shell
 php bin/magento module:enable WiseRobot_Io
@@ -32,7 +32,7 @@ php bin/magento setup:static-content:deploy -f
 
 ## Disable module
 
-If you wanna disable module. You can follow script bellow
+To disable the module follow the instructions below
 
 ```shell
 php bin/magento module:disable WiseRobot_Io
