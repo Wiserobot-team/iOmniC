@@ -13,9 +13,6 @@ Granular integration controls
 Run the command below to install via Composer
 
 ```shell
-composer config repositories.private-packagist composer https://repo.packagist.com/iomnic/
-composer config repositories.packagist.org false
-composer config --auth http-basic.repo.packagist.com Wiserobot-team packagist_uut_1a92a65d6d6d064184c2b6b42b682a2191a97396f9cf78921b60b7de4180b8d2d91a
 composer require wiserobot/module-iomnic
 ```
 
