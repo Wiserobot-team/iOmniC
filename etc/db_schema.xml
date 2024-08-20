@@ -41,15 +41,15 @@
     </table>
     <table name="sales_order" resource="sales" comment="Sales Flat Order">
         <column xsi:type="varchar" name="io_order_id" nullable="true" comment="Io Site Order ID"/>
-        <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io ChannelAdvisor Order ID"/>
-        <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io Buyer User ID"/>
-        <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Marketplace Source"/>
+        <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io Marketplace Source"/>
+        <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io ChannelAdvisor Order ID"/>
+        <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Buyer User ID"/>
     </table>
     <table name="sales_order_grid" resource="sales" engine="innodb" comment="Sales Flat Order Grid">
         <column xsi:type="varchar" name="io_order_id" nullable="true" comment="Io Site Order ID"/>
-        <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io ChannelAdvisor Order ID"/>
-        <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io Buyer User ID"/>
-        <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Marketplace Source"/>
+        <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io Marketplace Source"/>
+        <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io ChannelAdvisor Order ID"/>
+        <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Buyer User ID"/>
     </table>
     <table name="sales_order_item" resource="sales" engine="innodb" comment="Sales Flat Order Item">
         <column xsi:type="varchar" name="site_order_item_id" nullable="true" comment="Io Site Order Item ID"/>

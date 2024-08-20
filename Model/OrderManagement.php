@@ -334,10 +334,11 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             || !isset($orderInfo["order_increment_id"]) || !isset($orderInfo["grand_total"])
             || !isset($orderInfo["order_tax_type"]) || !isset($orderInfo["tax_amount"])
             || !isset($orderInfo["shipping_tax_type"]) || !isset($orderInfo["shipping_amount"])
-            || !isset($orderInfo["shipping_tax_amount"]) || !isset($orderInfo["discount_amount"])) {
+            || !isset($orderInfo["shipping_tax_amount"]) || !isset($orderInfo["discount_amount"])
+            || !isset($orderInfo["buyer_user_id"])) {
             $message = "Field: 'order_info' - {'order_increment_id', order_time_gmt', 'email', 'item_sale_source'
             , 'grand_total' , 'order_tax_type', 'tax_amount','shipping_tax_type', 'shipping_amount', 'shipping_tax_amount'
-            , 'discount_amount', 'checkout_status', 'shipping_status', 'refund_status'} data fields are required";
+            , 'discount_amount', 'checkout_status', 'shipping_status', 'refund_status', 'buyer_user_id'} data fields are required";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();
@@ -416,9 +417,9 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             if (!isset($item["id"]) || !isset($item["sku"]) || !$item["sku"] ||
                 !isset($item["name"]) || !$item["name"] || !isset($item["price"]) ||
                 !isset($item["qty"]) || !isset($item["tax_percent"]) || !isset($item["tax_amount"]) ||
-                !isset($item["weight"]) || !isset($item["buyer_user_id"])) {
+                !isset($item["weight"])) {
                 $message = "Field: 'item_info' - {'id', 'sku', 'name', 'price', 'qty', 'tax_percent'
-                , 'tax_amount', 'weight', 'buyer_user_id'} data fields are required";
+                , 'tax_amount', 'weight'} data fields are required";
                 $this->results["response"]["item"]["error"][] = $message;
                 $this->log("ERROR: " . $message);
                 $this->cleanResponseMessages();
@@ -475,7 +476,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $storeId = (int) $store->getId();
         $ioOrderId = $orderInfo["io_order_id"];
         $caOrderId = $orderInfo["ca_order_id"];
-        $buyerUserID = "";
+        $buyerUserID = $orderInfo["buyer_user_id"];
         $itemSaleSource = $orderInfo["item_sale_source"];
 
         $this->isTaxInclusive = false;
@@ -496,7 +497,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             $ioOrderItems = [];
             foreach ($itemInfo as $orderItem) {
                 $sku = $orderItem["sku"];
-                $buyerUserID = $orderItem["buyer_user_id"];
                 if (!isset($ioOrderItems[$sku])) {
                     $ioOrderItems[$sku] = $orderItem;
                 }
