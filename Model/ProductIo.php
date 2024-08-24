@@ -441,31 +441,25 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
-     * Process filter params
+     * Process filter data
      *
      * @param string $string
-     * @return string|null
+     * @return string
      */
-    public function processFilter(string $string): mixed
+    public function processFilter(string $string): string
     {
-        switch ($string) {
-            case strpos((string) $string, " eq ") == true:
-                $operator = "eq";
-                break;
-            case strpos((string) $string, " gt ") == true:
-                $operator = "gt";
-                break;
-            case strpos((string) $string, " le ") == true:
-                $operator = "le";
-                break;
-            case strpos((string) $string, " in ") == true:
-                $operator = "in";
-                break;
-            default:
-                $operator = null;
+        $operators = [
+            ' eq ' => 'eq',
+            ' gt ' => 'gt',
+            ' le ' => 'le',
+            ' in ' => 'in',
+        ];
+        foreach ($operators as $key => $operator) {
+            if (strpos($string, $key) !== false) {
+                return $operator;
+            }
         }
-
-        return $operator;
+        return '';
     }
 
     /**
