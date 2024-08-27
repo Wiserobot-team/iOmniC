@@ -124,11 +124,11 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $result = [];
         $storeName = $storeInfo->getName();
         foreach ($orderCollection as $order) {
-            $orderIId = $order->getIncrementId();
-            if ($orderIId) {
+            $incrementId = $order->getIncrementId();
+            if ($incrementId) {
                 $orderData = $this->formatOrderData($order);
                 if (!empty($orderData)) {
-                    $result[$orderIId] = array_merge(['store' => $storeName], $orderData);
+                    $result[$incrementId] = array_merge(['store' => $storeName], $orderData);
                 }
             }
         }
@@ -177,7 +177,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     }
 
     /**
-     * Get store information
+     * Get Store Info
      *
      * @param int $store
      * @return \Magento\Store\Model\Store
@@ -228,24 +228,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     }
 
     /**
-     * Apply sorting and paging to the order collection
-     *
-     * @param \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection
-     * @param int $page
-     * @param int $limit
-     */
-    public function applySortingAndPaging(
-        \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection,
-        int $page,
-        int $limit
-    ): void {
-        $orderCollection->setOrder('entity_id', 'asc')
-            ->setPageSize(min(max(1, (int) $limit), 100))
-            ->setCurPage(max(1, (int) $page));
-    }
-
-    /**
-     * Apply filters to the order collection
+     * Apply filter to the order collection
      *
      * @param \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection
      * @param string $filter
@@ -292,6 +275,23 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 );
             }
         }
+    }
+
+    /**
+     * Apply sorting and paging to the order collection
+     *
+     * @param \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection
+     * @param int $page
+     * @param int $limit
+     */
+    public function applySortingAndPaging(
+        \Magento\Sales\Model\ResourceModel\Order\Collection $orderCollection,
+        int $page,
+        int $limit
+    ): void {
+        $orderCollection->setOrder('entity_id', 'asc')
+            ->setPageSize(min(max(1, (int) $limit), 100))
+            ->setCurPage(max(1, (int) $page));
     }
 
     /**

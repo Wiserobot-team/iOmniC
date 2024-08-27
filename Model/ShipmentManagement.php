@@ -183,7 +183,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
     }
 
     /**
-     * Get store information
+     * Get Store Info
      *
      * @param int $store
      * @return \Magento\Store\Model\Store
@@ -241,7 +241,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
     }
 
     /**
-     * Apply filters to the shipment collection
+     * Apply filter to the shipment collection
      *
      * @param \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection $shipmentCollection
      * @param string $filter

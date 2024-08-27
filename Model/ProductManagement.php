@@ -50,6 +50,10 @@ use WiseRobot\Io\Model\ProductImageFactory;
 class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 {
     /**
+     * @var Zend_Log
+     */
+    public $logger;
+    /**
      * @var string
      */
     public $logFile = "wr_io_product_import.log";
@@ -271,6 +275,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->categoryHelper->logModel = $this;
         $this->imageHelper = $imageHelper;
         $this->productImageFactory = $productImageFactory;
+        $this->initializeLogger();
     }
 
     /**
@@ -1354,30 +1359,38 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function cleanResponseMessages(): void
     {
-        if (count($this->results["response"])) {
-            foreach ($this->results["response"] as $key => $value) {
-                if (isset($value["success"]) && !count($value["success"])) {
-                    unset($this->results["response"][$key]["success"]);
+        if (!empty($this->results["response"])) {
+            foreach ($this->results["response"] as $key => &$value) {
+                if (isset($value["success"])) {
+                    $value["success"] = array_unique(array_filter($value["success"]));
+                    if (empty($value["success"])) {
+                        unset($value["success"]);
+                    }
                 }
-                if (isset($value["error"]) && !count($value["error"])) {
-                    unset($this->results["response"][$key]["error"]);
+                if (isset($value["error"])) {
+                    $value["error"] = array_unique(array_filter($value["error"]));
+                    if (empty($value["error"])) {
+                        unset($value["error"]);
+                    }
                 }
-                if (isset($this->results["response"][$key]) &&
-                    !count($this->results["response"][$key])) {
+                if (empty($value)) {
                     unset($this->results["response"][$key]);
-                }
-                if (isset($this->results["response"][$key]["success"]) &&
-                    count($this->results["response"][$key]["success"])) {
-                    $successData = array_unique($this->results["response"][$key]["success"]);
-                    $this->results["response"][$key]["success"] = $successData;
-                }
-                if (isset($this->results["response"][$key]["error"]) &&
-                    count($this->results["response"][$key]["error"])) {
-                    $errorData = array_unique($this->results["response"][$key]["error"]);
-                    $this->results["response"][$key]["error"] = $errorData;
                 }
             }
         }
+    }
+
+    /**
+     * Initialize the logger
+     *
+     * @return void
+     */
+    public function initializeLogger(): void
+    {
+        $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath($this->logFile));
+        $this->logger = new \Zend_Log();
+        $this->logger->addWriter($writer);
     }
 
     /**
@@ -1388,10 +1401,8 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function log(string $message): void
     {
-        $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
-        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath('') . $this->logFile);
-        $logger = new \Zend_Log();
-        $logger->addWriter($writer);
-        $logger->info($message);
+        if ($this->logger) {
+            $this->logger->info($message);
+        }
     }
 }
