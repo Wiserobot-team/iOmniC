@@ -249,6 +249,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $this->paymentConfig = $paymentConfig;
         $this->ioOrderFactory = $ioOrderFactory;
         $this->skuHelper = $skuHelper;
+        $this->initializeResults();
         $this->initializeLogger();
     }
 
@@ -277,14 +278,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         mixed $shipmentInfo = [],
         mixed $refundInfo = []
     ): array {
-        // response messages
-        $this->results["response"]["data"]["success"] = [];
-        $this->results["response"]["data"]["error"] = [];
-        $this->results["response"]["item"]["success"] = [];
-        $this->results["response"]["item"]["error"] = [];
-
         $errorMess = "data request error";
-
         // store info
         if (!$store) {
             $message = "Field: 'store' is a required field";
@@ -407,7 +401,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         // item info
         if (!$itemInfo || !count($itemInfo)) {
             $message = "Field: 'item_info' is a required field";
-            $this->results["response"]["item"]["error"][] = $message;
+            $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();
             throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
@@ -419,7 +413,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 !isset($item["weight"])) {
                 $message = "Field: 'item_info' - {'id', 'sku', 'name', 'price', 'qty', 'tax_percent'
                 , 'tax_amount', 'weight'} data fields are required";
-                $this->results["response"]["item"]["error"][] = $message;
+                $this->results["response"]["data"]["error"][] = $message;
                 $this->log("ERROR: " . $message);
                 $this->cleanResponseMessages();
                 throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
@@ -664,7 +658,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                     // add order item
                     $webOrderItem = $this->getOrderItem($orderItem, $storeId);
                     if (!$webOrderItem) {
-                        $this->results["response"]["item"]["error"][] = "order " . $ioOrderId . " has invalid item";
+                        $this->results["response"]["data"]["error"][] = "order " . $ioOrderId . " has invalid item";
                         $this->log("WARN order " . $ioOrderId . " has invalid item");
                         return false;
                     }
@@ -696,7 +690,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                         $item = $cart->addProduct($product, (int) $webOrderItem['qty_ordered']);
                         if (is_string($item)) {
                             $message = "Order " . $ioOrderId . " product '" . $product->getSku() . "': " . $item;
-                            $this->results["response"]["item"]["error"][] = $message;
+                            $this->results["response"]["data"]["error"][] = $message;
                             $this->log("ERROR " . $message);
                             $this->eventManager->dispatch(
                                 'io_order_import_error',
@@ -712,7 +706,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                     } catch (\Exception $e) {
                         $message = "Order " . $ioOrderId . " product '" .
                             $product->getSku() . "': " . $e->getMessage();
-                        $this->results["response"]["item"]["error"][] = $message;
+                        $this->results["response"]["data"]["error"][] = $message;
                         $this->log("ERROR " . $message);
                         $this->cleanResponseMessages();
                         $this->eventManager->dispatch(
@@ -1851,9 +1845,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      */
     public function cancelOrder(int|string $id, string $typeId = 'incrementId'): bool
     {
-        $this->results["response"]["data"]["success"] = [];
-        $this->results["response"]["data"]["error"] = [];
-
         $typeId === "id"
         ? $order = $this->orderFactory->create()->load($id)
         : $order = $this->orderFactory->create()->loadByIncrementId($id);
@@ -1885,6 +1876,23 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             $this->cleanResponseMessages();
             throw new WebapiException(__($message), 0, 400);
         }
+    }
+
+    /**
+     * Initialize results structure
+     *
+     * @return void
+     */
+    public function initializeResults(): void
+    {
+        $this->results = [
+            "response" => [
+                "data" => [
+                    "success" => [],
+                    "error" => []
+                ]
+            ]
+        ];
     }
 
     /**
