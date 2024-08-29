@@ -1361,16 +1361,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     {
         if (!empty($this->results["response"])) {
             foreach ($this->results["response"] as $key => &$value) {
-                if (isset($value["success"])) {
-                    $value["success"] = array_unique(array_filter($value["success"]));
-                    if (empty($value["success"])) {
-                        unset($value["success"]);
-                    }
-                }
-                if (isset($value["error"])) {
-                    $value["error"] = array_unique(array_filter($value["error"]));
-                    if (empty($value["error"])) {
-                        unset($value["error"]);
+                foreach (['success', 'error'] as $type) {
+                    if (!empty($value[$type])) {
+                        $value[$type] = array_unique(array_filter($value[$type]));
+                    } else {
+                        unset($value[$type]);
                     }
                 }
                 if (empty($value)) {
