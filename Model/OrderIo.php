@@ -22,6 +22,7 @@ use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollection
 use Magento\Sales\Api\OrderRepositoryInterface;
 use Magento\Payment\Model\Config as PaymentConfig;
 use Magento\Shipping\Model\Config as ShippingConfig;
+use Magento\Directory\Model\RegionFactory;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Serialize\SerializerInterface;
 use Magento\Framework\Webapi\Exception as WebapiException;
@@ -60,6 +61,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @var ShippingConfig
      */
     public $shippingConfig;
+        /**
+     * @var RegionFactory
+     */
+    public $regionFactory;
     /**
      * @var ResourceConnection
      */
@@ -77,6 +82,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @param OrderRepositoryInterface $orderRepository
      * @param PaymentConfig $paymentConfig
      * @param ShippingConfig $shippingConfig
+     * @param RegionFactory $regionFactory
      * @param ResourceConnection $resourceConnection
      * @param SerializerInterface $serializer
      */
@@ -88,6 +94,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         OrderRepositoryInterface $orderRepository,
         PaymentConfig $paymentConfig,
         ShippingConfig $shippingConfig,
+        RegionFactory $regionFactory,
         ResourceConnection $resourceConnection,
         SerializerInterface $serializer
     ) {
@@ -98,6 +105,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $this->orderRepository = $orderRepository;
         $this->paymentConfig = $paymentConfig;
         $this->shippingConfig = $shippingConfig;
+        $this->regionFactory = $regionFactory;
         $this->resourceConnection = $resourceConnection;
         $this->serializer = $serializer;
     }
@@ -508,10 +516,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getShippingInfo(
         \Magento\Sales\Model\Order $order
     ): array {
-        $shippingAddress = !$order->getIsVirtual() ? $order->getShippingAddress() : null;
-        $billingAddress = $order->getBillingAddress();
-        if (!$shippingAddress) {
-            $shippingAddress = $billingAddress;
+        $shippingAddress = $order->getShippingAddress();
+        if ($shippingRegionId = $shippingAddress->getData('region_id')) {
+            $shippingRegion = $this->regionFactory->create()->load($shippingRegionId);
+            $shippingRegionId = $shippingRegion->getId() ? $shippingRegion->getCode() : $shippingRegionId;
         }
         return [
             "firstname" => $shippingAddress->getData("firstname"),
@@ -519,13 +527,41 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "company" => $shippingAddress->getData("company"),
             "street" => $shippingAddress->getData("street"),
             "city" => $shippingAddress->getData("city"),
-            "region_id" => $shippingAddress->getData("region_id"),
+            "region_id" => $shippingRegionId,
             "country_id" => $shippingAddress->getData("country_id"),
             "region" => $shippingAddress->getData("region"),
             "postcode" => $shippingAddress->getData("postcode"),
             "telephone" => $shippingAddress->getData("telephone"),
             "shipping_method" => $order->getShippingMethod(),
             "shipping_title" => $order->getShippingDescription()
+        ];
+    }
+
+    /**
+     * Get Order Billing Address Info
+     *
+     * @param \Magento\Sales\Model\Order $order
+     * @return array
+     */
+    public function getBillingInfo(
+        \Magento\Sales\Model\Order $order
+    ): array {
+        $billingAddress = $order->getBillingAddress();
+        if ($billingRegionId = $billingAddress->getData('region_id')) {
+            $billingRegion = $this->regionFactory->create()->load($billingRegionId);
+            $billingRegionId = $billingRegion->getId() ? $billingRegion->getCode() : $billingRegionId;
+        }
+        return [
+            "firstname" => $billingAddress->getData("firstname"),
+            "lastname" => $billingAddress->getData("lastname"),
+            "company" => $billingAddress->getData("company"),
+            "street" => $billingAddress->getData("street"),
+            "city" => $billingAddress->getData("city"),
+            "region_id" => $billingRegionId,
+            "country_id" => $billingAddress->getData("country_id"),
+            "region" => $billingAddress->getData("region"),
+            "postcode" => $billingAddress->getData("postcode"),
+            "telephone" => $billingAddress->getData("telephone")
         ];
     }
 
@@ -643,29 +679,6 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             ];
         }
         return $refundInfo;
-    }
-
-    /**
-     * Get Order Billing Address Info
-     *
-     * @param \Magento\Sales\Model\Order $order
-     * @return array
-     */
-    public function getBillingInfo(
-        \Magento\Sales\Model\Order $order
-    ): array {
-        return [
-            "firstname" => $order->getBillingAddress()->getData("firstname"),
-            "lastname" => $order->getBillingAddress()->getData("lastname"),
-            "company" => $order->getBillingAddress()->getData("company"),
-            "street" => $order->getBillingAddress()->getData("street"),
-            "city" => $order->getBillingAddress()->getData("city"),
-            "region_id" => $order->getBillingAddress()->getData("region_id"),
-            "country_id" => $order->getBillingAddress()->getData("country_id"),
-            "region" => $order->getBillingAddress()->getData("region"),
-            "postcode" => $order->getBillingAddress()->getData("postcode"),
-            "telephone" => $order->getBillingAddress()->getData("telephone")
-        ];
     }
 
     /**
