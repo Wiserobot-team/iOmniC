@@ -211,8 +211,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $productCollection = $this->createProductCollection($store);
         $this->applySelectAttributes($productCollection, $select);
         $this->applyFilter($productCollection, $filter);
-        $this->addMediaGallery($productCollection);
         $this->applySortingAndPaging($productCollection, $page, $limit);
+        $this->addMediaGallery($productCollection);
         $result = [];
         $storeId = (int) $storeInfo->getId();
         $storeName = $storeInfo->getName();
@@ -330,15 +330,25 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
-     * Add media gallery to the product collection
+     * Process filter data
      *
-     * @param \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection
-     * @return void
+     * @param string $string
+     * @return string
      */
-    public function addMediaGallery(
-        \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection
-    ): void {
-        $productCollection->addMediaGalleryData();
+    public function processFilter(string $string): string
+    {
+        $operators = [
+            ' eq ' => 'eq',
+            ' gt ' => 'gt',
+            ' le ' => 'le',
+            ' in ' => 'in',
+        ];
+        foreach ($operators as $key => $operator) {
+            if (strpos($string, $key) !== false) {
+                return $operator;
+            }
+        }
+        return '';
     }
 
     /**
@@ -360,25 +370,15 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
-     * Process filter data
+     * Add media gallery to the product collection
      *
-     * @param string $string
-     * @return string
+     * @param \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection
+     * @return void
      */
-    public function processFilter(string $string): string
-    {
-        $operators = [
-            ' eq ' => 'eq',
-            ' gt ' => 'gt',
-            ' le ' => 'le',
-            ' in ' => 'in',
-        ];
-        foreach ($operators as $key => $operator) {
-            if (strpos($string, $key) !== false) {
-                return $operator;
-            }
-        }
-        return '';
+    public function addMediaGallery(
+        \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection
+    ): void {
+        $productCollection->addMediaGalleryData();
     }
 
     /**
