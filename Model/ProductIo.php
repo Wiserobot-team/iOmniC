@@ -191,7 +191,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     ];
 
     /**
-     * Populate Products by filter params
+     * Filter Product Data
      *
      * @param int $store
      * @param string $select

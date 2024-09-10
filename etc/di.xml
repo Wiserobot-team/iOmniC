@@ -14,6 +14,7 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
     <preference for="WiseRobot\Io\Api\ProductIoInterface" type="WiseRobot\Io\Model\ProductIo" />
     <preference for="WiseRobot\Io\Api\ProductManagementInterface" type="WiseRobot\Io\Model\ProductManagement" />
+    <preference for="WiseRobot\Io\Api\StockManagementInterface" type="WiseRobot\Io\Model\StockManagement" />
     <preference for="WiseRobot\Io\Api\OrderIoInterface" type="WiseRobot\Io\Model\OrderIo" />
     <preference for="WiseRobot\Io\Api\OrderManagementInterface" type="WiseRobot\Io\Model\OrderManagement" />
     <preference for="WiseRobot\Io\Api\ShipmentManagementInterface" type="WiseRobot\Io\Model\ShipmentManagement" />

@@ -27,6 +27,18 @@
             <resource ref="self"/>
         </resources>
     </route>
+    <route url="/V1/io/stocks" method="POST">
+        <service class="WiseRobot\Io\Api\StockManagementInterface" method="getList" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
+    <route url="/V1/io/stocks/import" method="POST">
+        <service class="WiseRobot\Io\Api\StockManagementInterface" method="import" />
+        <resources>
+            <resource ref="self"/>
+        </resources>
+    </route>
     <!-- Order Service -->
     <route url="/V1/io/orders" method="POST">
         <service class="WiseRobot\Io\Api\OrderIoInterface" method="getList" />

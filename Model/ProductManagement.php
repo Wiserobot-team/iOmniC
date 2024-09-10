@@ -593,7 +593,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
                 } else {
-                    $message = "SKIP: sku '" . $sku . "' - product id <" . $product->getId() . "> no data changed";
+                    $message = "SKIP: sku '" . $sku . "' - product id <" . $product->getId() . "> no data was changed";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
                 }
@@ -613,33 +613,30 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                 $productId = $product->getId();
                 $stockData = $productData['stock'];
                 $_qty = (int) $stockData['qty'];
-                $minCartQty = isset($stockData['min_sale_qty']) ? (int) $stockData['min_sale_qty'] : '';
+                $minCartQty = isset($stockData['min_sale_qty']) ? (int) $stockData['min_sale_qty'] : null;
                 $stockUpdateData = [];
                 $stockItem = $this->stockRegistryInterface->getStockItem($productId);
                 if (!$stockItem->getId()) {
-                    $stockUpdateData['qty'] = 0;
-                    $stockUpdateData['is_in_stock'] = 0;
+                    $stockUpdateData = [
+                        'qty' => 0,
+                        'is_in_stock' => 0
+                    ];
                 }
-
                 $oldQty = $stockItem->getQty();
                 $oldQty = (int) $oldQty;
-
-                if ($_qty > 0) {
-                    if (!$stockItem->getData('is_in_stock')) {
-                        $stockUpdateData['is_in_stock'] = 1;
-                    }
+                $isInStock = (bool) $stockItem->getData('is_in_stock');
+                $currentMinSaleQty = (int) $stockItem->getData('min_sale_qty');
+                if ($_qty > 0 && !$isInStock) {
+                    $stockUpdateData['is_in_stock'] = 1;
                 }
-                if ($_qty <= 0) {
-                    if ($stockItem->getData('is_in_stock')) {
-                        $stockUpdateData['is_in_stock'] = 0;
-                    }
+                if ($_qty <= 0 && $isInStock) {
+                    $stockUpdateData['is_in_stock'] = 0;
                 }
-                if ($oldQty != $_qty) {
+                if ($oldQty !== $_qty) {
                     $stockUpdateData['qty'] = $_qty;
                     $stockUpdateData['old_qty'] = $oldQty;
                 }
-                if ($minCartQty && $stockItem->getData('min_sale_qty') &&
-                    $stockItem->getData('min_sale_qty') != $minCartQty) {
+                if ($minCartQty && $currentMinSaleQty !== $minCartQty) {
                     $stockUpdateData['min_sale_qty'] = $minCartQty;
                 }
                 if (count($stockUpdateData)) {
@@ -650,7 +647,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     $this->results["response"]["quantity"]["success"][] = $message;
                     $this->log($message);
                 } else {
-                    $message = "SKIP QTY: sku '" . $sku . "' - product id <" . $productId . "> no data changed";
+                    $message = "SKIP QTY: sku '" . $sku . "' - product id <" . $productId . "> no data was changed";
                     $this->results["response"]["quantity"]["success"][] = $message;
                     $this->log($message);
                 }
