@@ -211,8 +211,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function createOrderCollection(
         int $store
     ): \Magento\Sales\Model\ResourceModel\Order\Collection {
-        $orderCollection = $this->orderCollectionFactory->create();
-        $orderCollection->addFieldToFilter('main_table.store_id', $store)
+        $orderCollection = $this->orderCollectionFactory->create()
+            ->addFieldToFilter('main_table.store_id', $store)
             ->addFieldToSelect('*')
             ->getSelect()
             ->distinct(true)

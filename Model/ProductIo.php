@@ -255,15 +255,15 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     public function createProductCollection(
         int $store
     ): \Magento\Catalog\Model\ResourceModel\Product\Collection {
-        $productCollection = $this->productCollectionFactory->create();
-        $productCollection->addStoreFilter($store)
-        ->joinTable(
-            [$this->resourceConnection->getTableName('cataloginventory_stock_item')],
-            'product_id=entity_id',
-            ['qty', 'min_sale_qty'],
-            'stock_id = 1',
-            'left'
-        );
+        $productCollection = $this->productCollectionFactory->create()
+            ->addStoreFilter($store)
+            ->joinTable(
+                [$this->resourceConnection->getTableName('cataloginventory_stock_item')],
+                'product_id=entity_id',
+                ['qty', 'min_sale_qty'],
+                'stock_id = 1',
+                'left'
+            );
         return $productCollection;
     }
 
@@ -868,8 +868,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             $groupedInfo['is_parent'] = true;
             $childProductIds = $this->groupedProduct->create()->getChildrenIds($product->getId());
             if (!empty($childProductIds[3])) {
-                $productCollection = $this->productCollectionFactory->create();
-                $productCollection->addStoreFilter($storeId)
+                $productCollection = $this->productCollectionFactory->create()
+                    ->addStoreFilter($storeId)
                     ->addAttributeToSelect('sku')
                     ->addFieldToFilter('entity_id', ['in' => $childProductIds[3]]);
                 $childProductSkus = $productCollection->getColumnValues('sku');

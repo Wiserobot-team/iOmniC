@@ -209,8 +209,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
     public function createShipmentCollection(
         int $store
     ): \Magento\Sales\Model\ResourceModel\Order\Shipment\Collection {
-        $shipmentCollection = $this->shipmentCollectionFactory->create();
-        $shipmentCollection->addFieldToFilter('main_table.store_id', $store)
+        $shipmentCollection = $this->shipmentCollectionFactory->create()
+            ->addFieldToFilter('main_table.store_id', $store)
             ->addFieldToSelect('*')
             ->getSelect()
             ->distinct(true)
