@@ -779,7 +779,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             'is_in_relationship' => false,
             'is_parent' => false,
             'parent_sku' => '',
-            'super_attribute' => ''
+            'super_attribute' => '',
+            'child_sku' => ''
         ];
         $typeId = $product->getTypeId();
         if ($typeId === 'configurable') {
@@ -789,6 +790,18 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 'parent_sku' => $product->getSku(),
                 'super_attribute' => $this->getRelationshipName($product) ?: ''
             ];
+            $childProductIds = $this->configurableProduct->create()->getUsedProductIds($product);
+            if (!empty($childProductIds)) {
+                $productCollection = $this->productCollectionFactory->create()
+                    ->addStoreFilter($storeId)
+                    ->addAttributeToSelect('sku')
+                    ->addFieldToFilter('entity_id', ['in' => $childProductIds]);
+                $childProductSkus = $productCollection->getColumnValues('sku');
+                if (!empty($childProductSkus)) {
+                    sort($childProductSkus);
+                    $variationInfo['child_sku'] = implode(',', $childProductSkus);
+                }
+            }
         } elseif ($typeId === 'simple' || $typeId === 'virtual') {
             $parentIds = $this->configurableProduct->create()
                 ->getParentIdsByChild($product->getId());
@@ -853,18 +866,16 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $productType = $product->getTypeId();
         if ($productType === 'grouped') {
             $groupedInfo['is_parent'] = true;
-            $childrenProductIds = $this->groupedProduct->create()->getChildrenIds($product->getId());
-            if (!empty($childrenProductIds[3])) {
-                $childrenProductSkus = [];
-                foreach ($childrenProductIds[3] as $childrenProductId) {
-                    $childProduct = $this->productFactory->create()->setStoreId($storeId)->load($childrenProductId);
-                    if ($childProduct->getId()) {
-                        $childrenProductSkus[] = $childProduct->getSku();
-                    }
-                }
-                if (!empty($childrenProductSkus)) {
-                    sort($childrenProductSkus);
-                    $groupedInfo['child_sku'] = implode(',', $childrenProductSkus);
+            $childProductIds = $this->groupedProduct->create()->getChildrenIds($product->getId());
+            if (!empty($childProductIds[3])) {
+                $productCollection = $this->productCollectionFactory->create();
+                $productCollection->addStoreFilter($storeId)
+                    ->addAttributeToSelect('sku')
+                    ->addFieldToFilter('entity_id', ['in' => $childProductIds[3]]);
+                $childProductSkus = $productCollection->getColumnValues('sku');
+                if (!empty($childProductSkus)) {
+                    sort($childProductSkus);
+                    $groupedInfo['child_sku'] = implode(',', $childProductSkus);
                 }
             }
         } elseif (in_array($productType, ['simple', 'virtual'])) {
