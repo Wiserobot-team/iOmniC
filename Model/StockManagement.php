@@ -158,8 +158,8 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     public function createProductCollection(
         int $store
     ): \Magento\Catalog\Model\ResourceModel\Product\Collection {
-        $productCollection = $this->productCollectionFactory->create()
-            ->addStoreFilter($store)
+        $productCollection = $this->productCollectionFactory->create();
+        $productCollection->addStoreFilter($store)
             ->joinTable(
                 [$this->resourceConnection->getTableName('cataloginventory_stock_item')],
                 'product_id=entity_id',
