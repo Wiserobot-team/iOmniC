@@ -120,7 +120,11 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
 
                 // add current url image to product
                 $addedImageCount = $this->addImageToProductGallery(
-                    $product, $imageUrl, $flag, $imgPos, $productManagement
+                    $product,
+                    $imageUrl,
+                    $flag,
+                    $imgPos,
+                    $productManagement
                 );
                 if ($addedImageCount) {
                     $totalImagesAdded = $totalImagesAdded + $addedImageCount;
