@@ -221,7 +221,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             if ($sku) {
                 $productData = $this->formatProductData($product, $storeId);
                 if (!empty($productData)) {
-                    $result[$sku] = array_merge(['store_id' => $storeId, 'store' => $storeName], $productData);
+                    $productData['store_id'] = $storeId;
+                    $productData['store'] = $storeName;
+                    $result[$sku] = $productData;
                 }
             }
         }
@@ -919,7 +921,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param array $products
      * @return array
      */
-    public function getProductLinks(array $products): array {
+    public function getProductLinks(array $products): array
+    {
         $skus = [];
         $positions = [];
         foreach ($products as $product) {

@@ -185,7 +185,8 @@ class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
                 $creditMemoData = ['qtys' => $refundItems];
                 $creditMemo = $this->creditMemoFactory->createByOrder($order, $creditMemoData);
                 $creditMemo->save();
-                $this->addMessageAndLog("Credit Memo '{$creditMemo->getIncrementId()}' imported for order {$incrementId}", "success");
+                $message = "Credit Memo '{$creditMemo->getIncrementId()}' imported for order {$incrementId}";
+                $this->addMessageAndLog($message, "success");
                 $shippingRefundedTotal += (float) $creditMemo->getData("base_shipping_amount");
                 $shippingTaxRefundedTotal += (float) $creditMemo->getData("shipping_tax_amount");
                 $taxRefundedTotal += (float) $creditMemo->getData("tax_amount");

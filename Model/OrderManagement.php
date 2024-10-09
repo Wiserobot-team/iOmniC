@@ -330,8 +330,9 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             || !isset($orderInfo["shipping_amount"]) || !isset($orderInfo["shipping_tax_amount"])
             || !isset($orderInfo["discount_amount"])) {
             $message = "Field: 'order_info' - {order_time_gmt', 'email', 'item_sale_source'
-            , 'grand_total' , 'order_tax_type', 'tax_amount','shipping_tax_type', 'shipping_amount', 'shipping_tax_amount'
-            , 'discount_amount', 'checkout_status', 'shipping_status', 'refund_status'} data fields are required";
+            , 'grand_total' , 'order_tax_type', 'tax_amount','shipping_tax_type', 'shipping_amount'
+            , 'shipping_tax_amount', 'discount_amount', 'checkout_status', 'shipping_status'
+            , 'refund_status'} data fields are required";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
             $this->cleanResponseMessages();

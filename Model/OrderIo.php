@@ -61,7 +61,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @var ShippingConfig
      */
     public $shippingConfig;
-        /**
+    /**
      * @var RegionFactory
      */
     public $regionFactory;
@@ -136,7 +136,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             if ($incrementId) {
                 $orderData = $this->formatOrderData($order);
                 if (!empty($orderData)) {
-                    $result[$incrementId] = array_merge(['store' => $storeName], $orderData);
+                    $orderData['store'] = $storeName;
+                    $result[$incrementId] = $orderData;
                 }
             }
         }
@@ -268,7 +269,12 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             }
             if ($fieldName === "updated_at") {
                 $orderCollection->addFieldToFilter(
-                    ['main_table.updated_at', 'shipment.updated_at', 'shipment_track.updated_at', 'creditmemo.updated_at'],
+                    [
+                        'main_table.updated_at',
+                        'shipment.updated_at',
+                        'shipment_track.updated_at',
+                        'creditmemo.updated_at'
+                    ],
                     [
                         [$operator => $fieldValue],
                         [$operator => $fieldValue],

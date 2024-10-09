@@ -139,7 +139,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
             if ($shipmentIId) {
                 $shipmentData = $this->formatShipmentData($shipment);
                 if (!empty($shipmentData)) {
-                    $result[$shipmentIId] = array_merge(['store' => $storeName], $shipmentData);
+                    $shipmentData['store'] = $storeName;
+                    $result[$shipmentIId] = $shipmentData;
                 }
             }
         }
@@ -410,7 +411,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
             }
             foreach ($shipment["track_info"] as $track) {
                 if (empty($track["carrier_code"]) || empty($track["title"])) {
-                    $this->addMessageAndLog("Field: 'track_info' - {'carrier_code','title'} data fields are required", "error");
+                    $message = "Field: 'track_info' - {'carrier_code','title'} data fields are required";
+                    $this->addMessageAndLog($message, "error");
                 }
             }
         }
@@ -462,7 +464,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
                 $shipment->getOrder()->setIsInProcess(true);
                 $shipment->save();
                 $shipment->getOrder()->save();
-                $this->addMessageAndLog("Shipment '{$shipment->getIncrementId()}' imported for order {$order->getIncrementId()}", "success");
+                $message = "Shipment '{$shipment->getIncrementId()}' imported for order {$order->getIncrementId()}";
+                $this->addMessageAndLog($message, "success");
             }
         } catch (\Exception $e) {
             $this->addMessageAndLog("ERROR create shipment {$e->getMessage()}", "error");

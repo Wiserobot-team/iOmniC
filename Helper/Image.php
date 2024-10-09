@@ -119,7 +119,9 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 $this->removeImage($product, $imgPos, $productManagement);
 
                 // add current url image to product
-                $addedImageCount = $this->addImageToProductGallery($product, $imageUrl, $flag, $imgPos, $productManagement);
+                $addedImageCount = $this->addImageToProductGallery(
+                    $product, $imageUrl, $flag, $imgPos, $productManagement
+                );
                 if ($addedImageCount) {
                     $totalImagesAdded = $totalImagesAdded + $addedImageCount;
                 } else {

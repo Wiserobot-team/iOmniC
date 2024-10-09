@@ -124,7 +124,8 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
             if ($sku) {
                 $stockData = $this->formatStockData($product);
                 if (!empty($stockData)) {
-                    $result[$sku] = array_merge(['store' => $storeName], $stockData);
+                    $stockData['store'] = $storeName;
+                    $result[$sku] = $stockData;
                 }
             }
         }
@@ -341,7 +342,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     /**
      * Import Stock Data
      *
-     * @param @param \Magento\Catalog\Model\Product $product
+     * @param \Magento\Catalog\Model\Product $product
      * @param array $stockInfo
      * @return void
      */
@@ -381,12 +382,15 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
             if (!empty($stockUpdateData)) {
                 $product->setStockData($stockUpdateData);
                 $product->save();
-                $this->addMessageAndLog("SAVED QTY: sku: '{$sku}' - product id <{$productId}> : " . json_encode($stockUpdateData), "success");
+                $message = "SAVED QTY: sku: '{$sku}' - product id <{$productId}> : " . json_encode($stockUpdateData);
+                $this->addMessageAndLog($message, "success");
             } else {
-                $this->addMessageAndLog("SKIP QTY: sku '{$sku}' - product id <{$productId}> no data was changed", "success");
+                $message = "SKIP QTY: sku '{$sku}' - product id <{$productId}> no data was changed";
+                $this->addMessageAndLog($message, "success");
             }
         } catch (\Exception $e) {
-            $this->addMessageAndLog("ERROR QTY: sku '{$sku}' - product id <{$productId} " . $e->getMessage(), "error");
+            $message = "ERROR QTY: sku '{$sku}' - product id <{$productId} " . $e->getMessage();
+            $this->addMessageAndLog($message, "error");
         }
     }
 
