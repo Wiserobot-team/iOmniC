@@ -18,110 +18,110 @@
     <route url="/V1/io/products" method="POST">
         <service class="WiseRobot\Io\Api\ProductIoInterface" method="getList" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Catalog::products" />
         </resources>
     </route>
     <route url="/V1/io/products/import" method="POST">
         <service class="WiseRobot\Io\Api\ProductManagementInterface" method="import" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Catalog::products" />
         </resources>
     </route>
     <route url="/V1/io/stocks" method="POST">
         <service class="WiseRobot\Io\Api\StockManagementInterface" method="getList" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Catalog::products" />
         </resources>
     </route>
     <route url="/V1/io/stocks/import" method="POST">
         <service class="WiseRobot\Io\Api\StockManagementInterface" method="import" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Catalog::products" />
         </resources>
     </route>
     <!-- Order Service -->
     <route url="/V1/io/orders" method="POST">
         <service class="WiseRobot\Io\Api\OrderIoInterface" method="getList" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/orders/:orderId" method="GET">
         <service class="WiseRobot\Io\Api\OrderIoInterface" method="getById" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/orders/increment-id/:incrementId" method="GET">
         <service class="WiseRobot\Io\Api\OrderIoInterface" method="getByIncrementId" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/payment-methods" method="GET">
         <service class="WiseRobot\Io\Api\OrderIoInterface" method="getPaymentMethods" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/shipping-methods" method="GET">
         <service class="WiseRobot\Io\Api\OrderIoInterface" method="getShippingMethods" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/shipping-carriers" method="GET">
         <service class="WiseRobot\Io\Api\OrderIoInterface" method="getShippingCarriers" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/orders/import" method="POST">
         <service class="WiseRobot\Io\Api\OrderManagementInterface" method="import" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/orders/:orderId/cancel" method="POST">
         <service class="WiseRobot\Io\Api\OrderManagementInterface" method="cancelById" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/orders/increment-id/:incrementId/cancel" method="POST">
         <service class="WiseRobot\Io\Api\OrderManagementInterface" method="cancelByIncrementId" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/shipments" method="POST">
         <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="getList" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/shipments/:shipmentId" method="GET">
         <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="getById" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/shipments/increment-id/:incrementId" method="GET">
         <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="getByIncrementId" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/shipments/import" method="POST">
         <service class="WiseRobot\Io\Api\ShipmentManagementInterface" method="import" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
     <route url="/V1/io/refunds/import" method="POST">
         <service class="WiseRobot\Io\Api\RefundManagementInterface" method="import" />
         <resources>
-            <resource ref="self"/>
+            <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
 </routes>
