@@ -634,10 +634,8 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                         throw new WebapiException(__($e->getMessage()), 0, 400);
                     }
                 }
-                if (!$isOldOrder) {
-                    if (!$skuIsMissing) {
-                        $cart->assignCustomer($customer);
-                    }
+                if (!$isOldOrder && !$skuIsMissing) {
+                    $cart->assignCustomer($customer);
                 }
                 $cart->setCustomerIsGuest(0)
                     ->setCustomerId($customer->getId())
@@ -871,21 +869,17 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $newOrder->setData("base_subtotal", $orderSubtotal);
                 $newOrder->setData("subtotal_incl_tax", $orderSubtotal);
                 $newOrder->setData("base_subtotal_incl_tax", $orderSubtotal);
-
                 $newOrder->setData("tax_amount", $orderInfo["tax_amount"]);
                 $newOrder->setData("base_tax_amount", $orderInfo["tax_amount"]);
-
                 if ((int) $orderInfo["shipping_tax_type"]) {
                     $shippingCost = (float) $orderInfo["shipping_amount"] - $orderInfo["shipping_tax_amount"];
                 } else {
                     $shippingCost = (float) $orderInfo["shipping_amount"];
                 }
-
                 $newOrder->setData("base_shipping_amount", $shippingCost);
                 $newOrder->setData("shipping_amount", $shippingCost);
                 $newOrder->setData("shipping_tax_amount", $orderInfo["shipping_tax_amount"]);
                 $newOrder->setData("base_shipping_tax_amount", $orderInfo["shipping_tax_amount"]);
-
                 $currencyCode = $store->getCurrentCurrencyCode();
                 $newOrder->setData('base_currency_code', $currencyCode);
                 $newOrder->setData('store_currency_code', $currencyCode);
@@ -894,12 +888,9 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $newOrder->setData("is_virtual", 0);
                 $newOrder->setData("total_qty_ordered", $orderItemsQtyTotal);
                 $newOrder->setData("base_total_qty_ordered", $orderItemsQtyTotal);
-
                 $newOrder->setData("discount_amount", $orderInfo["discount_amount"]);
                 $newOrder->setData("base_discount_amount", $orderInfo["discount_amount"]);
-
                 $newOrder->setData("base_to_global_rate", 1);
-
                 if ($orderInfo["order_time_gmt"]) {
                     $newOrder->setData("created_at", $orderInfo["order_time_gmt"]);
                 }
@@ -947,7 +938,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
 
             // save order
             $savedOrder = $newOrder->save();
-
             if (!$isOldOrder && $skuIsMissing) {
                 // set prefix
                 if (!empty($orderInfo["order_increment_id"])) {
@@ -1301,7 +1291,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
 
         $orderItem->setData("site_order_item_id", $item["id"]);
 
-        $itemPrice = (float) $item["price"];
         if ($this->isTaxInclusive) {
             $rowTax = (float) $item["tax_amount"];
             $itemTax = $rowTax / (int) $item["qty"];
@@ -1329,8 +1318,8 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             ->setData("base_price", $itemPrice)
             ->setData("price_incl_tax", $priceInclTax)
             ->setData("base_price_incl_tax", $priceInclTax)
-            ->setData("original_price", $itemPrice)
-            ->setData("base_original_price", $itemPrice)
+            ->setData("original_price", $priceInclTax)
+            ->setData("base_original_price", $priceInclTax)
             ->setData("row_total", $rowTotal)
             ->setData("base_row_total", $rowTotal)
             ->setData("row_total_incl_tax", $rowTotalInclTax)
@@ -1363,13 +1352,10 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $mageOrderItem->setData("weee_tax_row_disposition", 0);
         $mageOrderItem->setData("base_weee_tax_disposition", 0);
         $mageOrderItem->setData("base_weee_tax_row_disposition", 0);
-
         $mageOrderItem->setData("site_order_item_id", $orderItem->getData("site_order_item_id"));
-
         $mageOrderItem->setData("tax_amount", $orderItem->getData("tax_amount"));
         $mageOrderItem->setData("base_tax_amount", $orderItem->getData("base_tax_amount"));
         $mageOrderItem->setData('tax_percent', $orderItem->getData('tax_percent'));
-
         $mageOrderItem->setData("sku", $orderItem->getData("sku"))
             ->setData("name", $orderItem->getData("name"))
             ->setData("weight", $orderItem->getData("weight"))
@@ -1428,7 +1414,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $product
             );
         foreach ($selectionCollection as $selection) {
-                $bundleOptions[$selection->getOptionId()][] = $selection->getSelectionId();
+            $bundleOptions[$selection->getOptionId()][] = $selection->getSelectionId();
         }
 
         return $bundleOptions;
