@@ -59,6 +59,10 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      */
     public $isTaxInclusive = false;
     /**
+     * @var bool
+     */
+    public $originalPriceInclTax = false;
+    /**
      * @var array
      */
     public array $results = [];
@@ -325,13 +329,12 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             || !isset($orderInfo["checkout_status"]) || !$orderInfo["checkout_status"]
             || !isset($orderInfo["shipping_status"]) || !$orderInfo["shipping_status"]
             || !isset($orderInfo["refund_status"]) || !$orderInfo["refund_status"]
-            || !isset($orderInfo["grand_total"]) || !isset($orderInfo["order_tax_type"])
-            || !isset($orderInfo["tax_amount"]) || !isset($orderInfo["shipping_tax_type"])
+            || !isset($orderInfo["grand_total"]) || !isset($orderInfo["tax_amount"])
             || !isset($orderInfo["shipping_amount"]) || !isset($orderInfo["shipping_tax_amount"])
             || !isset($orderInfo["discount_amount"])) {
             $message = "Field: 'order_info' - {order_time_gmt', 'email', 'item_sale_source'
-            , 'grand_total' , 'order_tax_type', 'tax_amount','shipping_tax_type', 'shipping_amount'
-            , 'shipping_tax_amount', 'discount_amount', 'checkout_status', 'shipping_status'
+            , 'grand_total' , 'tax_amount', 'shipping_amount', 'shipping_tax_amount'
+            , 'discount_amount', 'checkout_status', 'shipping_status'
             , 'refund_status'} data fields are required";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log("ERROR: " . $message);
@@ -474,8 +477,13 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $itemSaleSource = $orderInfo["item_sale_source"];
 
         $this->isTaxInclusive = false;
-        if ((int) $orderInfo["order_tax_type"]) {
+        if (!empty($orderInfo["order_tax_type"])) {
             $this->isTaxInclusive = true;
+        }
+
+        $this->originalPriceInclTax = false;
+        if (!empty($orderInfo["original_price_type"])) {
+            $this->originalPriceInclTax = true;
         }
 
         try {
@@ -663,7 +671,11 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                     }
                     $orderItemsWeightTotal += (float) $orderItem["weight"];
                     $orderItemsQtyTotal += (int) $orderItem["qty"];
-                    $orderSubtotal += ((float) $orderItem["qty"] * $webOrderItem->getData('price'));
+                    if (!empty($orderInfo["order_subtotal_type"])) {
+                        $orderSubtotal += ((float) $orderItem["qty"] * $webOrderItem->getData('price_incl_tax'));
+                    } else {
+                        $orderSubtotal += ((float) $orderItem["qty"] * $webOrderItem->getData('price'));
+                    }
 
                     if ($skuIsMissing) {
                         $cart->addItem($webOrderItem);
@@ -871,7 +883,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $newOrder->setData("base_subtotal_incl_tax", $orderSubtotal);
                 $newOrder->setData("tax_amount", $orderInfo["tax_amount"]);
                 $newOrder->setData("base_tax_amount", $orderInfo["tax_amount"]);
-                if ((int) $orderInfo["shipping_tax_type"]) {
+                if (!empty($orderInfo["shipping_tax_type"])) {
                     $shippingCost = (float) $orderInfo["shipping_amount"] - $orderInfo["shipping_tax_amount"];
                 } else {
                     $shippingCost = (float) $orderInfo["shipping_amount"];
@@ -1305,11 +1317,11 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
 
         $rowTotal = $itemPrice * (int) $item["qty"];
         $rowTotalInclTax = $priceInclTax * (int) $item["qty"];
+        $originalPrice = $this->originalPriceInclTax ? $priceInclTax : $itemPrice;
 
         $orderItem->setData("tax_amount", $rowTax);
         $orderItem->setData("base_tax_amount", $rowTax);
         $orderItem->setData('tax_percent', (float) $item["tax_percent"]);
-
         $orderItem->setData("sku", $sku)
             ->setData("name", $item["name"])
             ->setData("weight", (float) $item["weight"])
@@ -1318,8 +1330,8 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             ->setData("base_price", $itemPrice)
             ->setData("price_incl_tax", $priceInclTax)
             ->setData("base_price_incl_tax", $priceInclTax)
-            ->setData("original_price", $priceInclTax)
-            ->setData("base_original_price", $priceInclTax)
+            ->setData("original_price", $originalPrice)
+            ->setData("base_original_price", $originalPrice)
             ->setData("row_total", $rowTotal)
             ->setData("base_row_total", $rowTotal)
             ->setData("row_total_incl_tax", $rowTotalInclTax)
