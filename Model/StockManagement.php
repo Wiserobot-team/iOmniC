@@ -329,11 +329,11 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     {
         $productId = $this->productFactory->create()->getIdBySku($stockInfo['sku']);
         if (!$productId) {
-            $this->addMessageAndLog("Cannot get product ID from SKU {$stockInfo['sku']}", "error");
+            $this->addMessageAndLog("Cannot get product id from sku '{$stockInfo['sku']}'", "error");
         }
         $product = $this->productFactory->create()->setStoreId((int) $stockInfo['store_id'])->load($productId);
         if (!$product || !$product->getId()) {
-            $this->addMessageAndLog("Cannot load product by ID {$productId}", "error");
+            $this->addMessageAndLog("Cannot load product by id <{$productId}>", "error");
         }
         $this->importStock($product, $stockInfo);
         return true;
