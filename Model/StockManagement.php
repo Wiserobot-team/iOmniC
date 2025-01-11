@@ -24,6 +24,8 @@ use Magento\Store\Model\StoreManagerInterface;
 use Magento\Eav\Api\AttributeRepositoryInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Webapi\Exception as WebapiException;
+use Magento\Framework\Module\Manager as ModuleManager;
+use Magento\Framework\ObjectManagerInterface;
 
 class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
 {
@@ -67,6 +69,14 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
      * @var ResourceConnection
      */
     public $resourceConnection;
+    /**
+     * @var ModuleManager
+     */
+    public $moduleManager;
+    /**
+     * @var ObjectManagerInterface
+     */
+    public $objectManager;
 
     /**
      * @param Filesystem $filesystem
@@ -76,6 +86,8 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
      * @param StoreManagerInterface $storeManager
      * @param AttributeRepositoryInterface $attributeRepositoryInterface
      * @param ResourceConnection $resourceConnection
+     * @param ModuleManager $moduleManager
+     * @param ObjectManagerInterface $objectManager
      */
     public function __construct(
         Filesystem $filesystem,
@@ -84,7 +96,9 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         StockRegistryInterface $stockRegistryInterface,
         StoreManagerInterface $storeManager,
         AttributeRepositoryInterface $attributeRepositoryInterface,
-        ResourceConnection $resourceConnection
+        ResourceConnection $resourceConnection,
+        ModuleManager $moduleManager,
+        ObjectManagerInterface $objectManager
     ) {
         $this->filesystem = $filesystem;
         $this->productFactory = $productFactory;
@@ -93,6 +107,8 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         $this->storeManager = $storeManager;
         $this->attributeRepositoryInterface = $attributeRepositoryInterface;
         $this->resourceConnection = $resourceConnection;
+        $this->moduleManager = $moduleManager;
+        $this->objectManager = $objectManager;
         $this->initializeResults();
         $this->initializeLogger();
     }
@@ -214,7 +230,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
             }
-            if ($operator === "in") {
+            if ($operator === "in" || $operator === "nin") {
                 $fieldValue = array_map('trim', explode(",", $fieldValue));
             }
             $productCollection->addFieldToFilter(
@@ -234,9 +250,17 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     {
         $operators = [
             ' eq ' => 'eq',
+            ' neq ' => 'neq',
             ' gt ' => 'gt',
-            ' le ' => 'le',
+            ' gteq ' => 'gteq',
+            ' lt ' => 'lt',
+            ' lteq ' => 'lteq',
+            ' like ' => 'like',
+            ' nlike ' => 'nlike',
             ' in ' => 'in',
+            ' nin ' => 'nin',
+            ' null ' => 'null',
+            ' notnull ' => 'notnull',
         ];
         foreach ($operators as $key => $operator) {
             if (strpos($string, $key) !== false) {
@@ -273,19 +297,115 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     public function formatStockData(
         \Magento\Catalog\Model\Product $product
     ): array {
+        $productSku = $product->getData("sku");
         $qty = (int) $product->getData("qty");
         $minCartQty = (int) $product->getData("min_sale_qty");
-        return [
+        $stockData = [
             'stock_info' => [
                 "store_id" => (int) $product->getData("store_id"),
                 'product_id' => (int) $product->getData("entity_id"),
-                'sku' => $product->getData("sku"),
+                'sku' => $productSku,
                 'created_at' => $product->getData("created_at"),
                 'updated_at' => $product->getData("updated_at"),
                 "qty" => $qty ?: null,
-                "min_cart_qty" => $minCartQty ?: null
+                "min_cart_qty" => $minCartQty ?: null,
             ]
         ];
+        if ($this->isMSIEnabled()) {
+            $this->populateSourceItemsInfo($stockData, $productSku);
+            $this->populateSalableQuantityInfo($stockData, $productSku);
+        }
+        return $stockData;
+    }
+
+    /**
+     * Populate Source Items Info
+     *
+     * @param array $stockData
+     * @param string $sku
+     * @return void
+     */
+    public function populateSourceItemsInfo(
+        array &$stockData,
+        string $sku
+    ): void {
+        try {
+            $sourceItemsInfo = [];
+            $sourceItems = $this->objectManager->get(
+                \Magento\InventoryApi\Api\GetSourceItemsBySkuInterface::class
+            )->execute($sku);
+            foreach ($sourceItems as $sourceItem) {
+                $sourceCode = $sourceItem->getData('source_code');
+                 try {
+                    $source = $this->objectManager->get(
+                        \Magento\InventoryApi\Api\SourceRepositoryInterface::class
+                    )->get($sourceCode);
+                } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
+                    continue;
+                }
+                $sourceItemsInfo[] = [
+                    'source_item_id' => (int) $sourceItem->getData('source_item_id'),
+                    'source_code' => $sourceCode,
+                    'source_name' => $source->getName(),
+                    'quantity' => (int) $sourceItem->getData('quantity'),
+                    'status' => (int) $sourceItem->getData('status'),
+                ];
+            }
+            if (!empty($sourceItemsInfo)) {
+                $stockData['source_items_info'] = $sourceItemsInfo;
+            }
+        } catch (\Exception $e) {
+        }
+    }
+
+    /**
+     * Populate Salable Quantity Info
+     *
+     * @param array $stockData
+     * @param string $sku
+     * @return void
+     */
+    public function populateSalableQuantityInfo(
+        array &$stockData,
+        string $sku
+    ): void {
+        try {
+            $salableQuantityInfo = [];
+            $salableQuantities = $this->objectManager->get(
+                \Magento\InventorySalesAdminUi\Model\GetSalableQuantityDataBySku::class
+            )->execute($sku);
+            foreach ($salableQuantities as $salableQuantity) {
+                $sourceCodes = [];
+                $stockId = (int) $salableQuantity['stock_id'];
+                $sources = $this->objectManager->get(
+                    \Magento\InventoryApi\Api\GetSourcesAssignedToStockOrderedByPriorityInterface::class
+                )->execute($stockId);
+                foreach ($sources as $source) {
+                    $sourceCodes[] = $source->getSourceCode();
+                }
+                $salableQuantityInfo[] = [
+                    'stock_id' => $stockId,
+                    'stock_name' => $salableQuantity['stock_name'],
+                    'qty' => (int) $salableQuantity['qty'],
+                    'manage_stock' => (int) $salableQuantity['manage_stock'],
+                    'source_codes' => implode(",", $sourceCodes),
+                ];
+            }
+            if (!empty($salableQuantityInfo)) {
+                $stockData['salable_quantity_info'] = $salableQuantityInfo;
+            }
+        } catch (\Exception $e) {
+        }
+    }
+
+    /**
+     * Check MSI (Multi-Source Inventory) Status
+     *
+     * @return bool
+     */
+    public function isMSIEnabled()
+    {
+        return $this->moduleManager->isEnabled('Magento_Inventory');
     }
 
     /**

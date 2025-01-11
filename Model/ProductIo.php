@@ -25,8 +25,11 @@ use Magento\Catalog\Model\CategoryFactory;
 use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as ConfigurableProduct;
 use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
 use Magento\Eav\Api\AttributeRepositoryInterface;
+use Magento\Catalog\Api\TierPriceStorageInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Webapi\Exception as WebapiException;
+use Magento\Framework\Module\Manager as ModuleManager;
+use Magento\Framework\ObjectManagerInterface;
 
 class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 {
@@ -83,9 +86,21 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public $attributeRepositoryInterface;
     /**
+     * @var TierPriceStorageInterface
+     */
+    public $tierPriceStorageInterface;
+    /**
      * @var ResourceConnection
      */
     public $resourceConnection;
+    /**
+     * @var ModuleManager
+     */
+    public $moduleManager;
+    /**
+     * @var ObjectManagerInterface
+     */
+    public $objectManager;
 
     /**
      * @param ProductFactory $productFactory
@@ -98,7 +113,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param ConfigurableProduct $configurableProduct
      * @param GroupedProduct $groupedProduct
      * @param AttributeRepositoryInterface $attributeRepositoryInterface
+     * @param TierPriceStorageInterface $tierPriceStorageInterface
      * @param ResourceConnection $resourceConnection
+     * @param ModuleManager $moduleManager
+     * @param ObjectManagerInterface $objectManager
      */
     public function __construct(
         ProductFactory $productFactory,
@@ -111,7 +129,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         ConfigurableProduct $configurableProduct,
         GroupedProduct $groupedProduct,
         AttributeRepositoryInterface $attributeRepositoryInterface,
-        ResourceConnection $resourceConnection
+        TierPriceStorageInterface $tierPriceStorageInterface,
+        ResourceConnection $resourceConnection,
+        ModuleManager $moduleManager,
+        ObjectManagerInterface $objectManager
     ) {
         $this->productFactory = $productFactory;
         $this->productCollectionFactory = $productCollectionFactory;
@@ -123,7 +144,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $this->configurableProduct = $configurableProduct;
         $this->groupedProduct = $groupedProduct;
         $this->attributeRepositoryInterface = $attributeRepositoryInterface;
+        $this->tierPriceStorageInterface = $tierPriceStorageInterface;
         $this->resourceConnection = $resourceConnection;
+        $this->moduleManager = $moduleManager;
+        $this->objectManager = $objectManager;
     }
 
     /**
@@ -321,7 +345,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
             }
-            if ($operator === "in") {
+            if ($operator === "in" || $operator === "nin") {
                 $fieldValue = array_map('trim', explode(",", $fieldValue));
             }
             $productCollection->addFieldToFilter(
@@ -341,9 +365,17 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     {
         $operators = [
             ' eq ' => 'eq',
+            ' neq ' => 'neq',
             ' gt ' => 'gt',
-            ' le ' => 'le',
+            ' gteq ' => 'gteq',
+            ' lt ' => 'lt',
+            ' lteq ' => 'lteq',
+            ' like ' => 'like',
+            ' nlike ' => 'nlike',
             ' in ' => 'in',
+            ' nin ' => 'nin',
+            ' null ' => 'null',
+            ' notnull ' => 'notnull',
         ];
         foreach ($operators as $key => $operator) {
             if (strpos($string, $key) !== false) {
@@ -395,11 +427,12 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         int $storeId
     ): array {
         $productId = (int) $product->getData("entity_id");
+        $productSku = $product->getData("sku");
         $typeId = $product->getData("type_id");
         $productData = [
             'attribute_info' => [
                 'id' => $productId,
-                'sku' => $product->getData("sku"),
+                'sku' => $productSku,
                 'name' => $product->getData("name"),
                 'attribute_set' => $this->getAttrValue($product, 'attribute_set_id', $storeId),
                 'visibility' => $this->getAttrValue($product, 'visibility', $storeId),
@@ -408,7 +441,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 'created_at' => $product->getData("created_at"),
                 'updated_at' => $product->getData("updated_at"),
                 'status' => $this->getAttrValue($product, 'status', $storeId),
-                'price' => (float) $this->getAttrValue($product, 'price', $storeId)
+                'price' => (float) $this->getAttrValue($product, 'price', $storeId),
+                'website_ids' => implode(",", $product->getWebsiteIds()),
+                'store_ids' => implode(",", $product->getStoreIds()),
             ]
         ];
         $this->populateImageAttributes($productData, $product);
@@ -420,7 +455,12 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             $productData['grouped_info'] = $this->populateGroupedProductInfo($product, $storeId);
         }
         $this->populateProductLinks($productData, $product);
+        $this->populateTierPricesInfo($productData, $productSku);
         $this->populateStockInfo($productData, $product);
+        if ($this->isMSIEnabled()) {
+            $this->populateSourceItemsInfo($productData, $productSku);
+            $this->populateSalableQuantityInfo($productData, $productSku);
+        }
         $this->populateCategories($productData, $product, $storeId);
         $this->populateProductAttributes($productData, $product, $storeId);
         return $productData;
@@ -498,8 +538,12 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         if ($gallery && $gallery->getSize()) {
             foreach ($gallery as $image) {
                 $imageInfo[] = [
-                    'position' => $image->getPosition(),
-                    'url' => $image->getUrl()
+                    'position' => (int) $image->getPosition(),
+                    'url' => $image->getUrl(),
+                    'file' => $image->getFile(),
+                    'label' => $image->getLabel(),
+                    'disabled' => (int) $image->getDisabled(),
+                    'path' => $image->getPath(),
                 ];
             }
         }
@@ -933,6 +977,36 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
+     * Populate Tier Prices Info
+     *
+     * @param array $productData
+     * @param string $sku
+     * @return void
+     */
+    public function populateTierPricesInfo(
+        array &$productData,
+        string $sku
+    ): void {
+        try {
+            $tierPricesInfo = [];
+            $tierPrices = $this->tierPriceStorageInterface->get([$sku]);
+            foreach ($tierPrices as $tierPrice) {
+                $tierPricesInfo[] = [
+                    'price' => floatval($tierPrice->getData('price')),
+                    'price_type' => $tierPrice->getData('price_type'),
+                    'website_id' => (int) $tierPrice->getData('website_id'),
+                    'customer_group' => $tierPrice->getData('customer_group'),
+                    'quantity' => (int) $tierPrice->getData('quantity'),
+                ];
+            }
+            if (!empty($tierPricesInfo)) {
+                $productData['tier_prices_info'] = $tierPricesInfo;
+            }
+        } catch (\Exception $e) {
+        }
+    }
+
+    /**
      * Populate Stock Info
      *
      * @param array $productData
@@ -949,5 +1023,95 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             "qty" => $qty ?: null,
             "min_cart_qty" => $minCartQty ?: null
         ];
+    }
+
+    /**
+     * Populate Source Items Info
+     *
+     * @param array $productData
+     * @param string $sku
+     * @return void
+     */
+    public function populateSourceItemsInfo(
+        array &$productData,
+        string $sku
+    ): void {
+        try {
+            $sourceItemsInfo = [];
+            $sourceItems = $this->objectManager->get(
+                \Magento\InventoryApi\Api\GetSourceItemsBySkuInterface::class
+            )->execute($sku);
+            foreach ($sourceItems as $sourceItem) {
+                $sourceCode = $sourceItem->getData('source_code');
+                 try {
+                    $source = $this->objectManager->get(
+                        \Magento\InventoryApi\Api\SourceRepositoryInterface::class
+                    )->get($sourceCode);
+                } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
+                    continue;
+                }
+                $sourceItemsInfo[] = [
+                    'source_item_id' => (int) $sourceItem->getData('source_item_id'),
+                    'source_code' => $sourceCode,
+                    'source_name' => $source->getName(),
+                    'quantity' => (int) $sourceItem->getData('quantity'),
+                    'status' => (int) $sourceItem->getData('status'),
+                ];
+            }
+            if (!empty($sourceItemsInfo)) {
+                $productData['source_items_info'] = $sourceItemsInfo;
+            }
+        } catch (\Exception $e) {
+        }
+    }
+
+    /**
+     * Populate Salable Quantity Info
+     *
+     * @param array $productData
+     * @param string $sku
+     * @return void
+     */
+    public function populateSalableQuantityInfo(
+        array &$productData,
+        string $sku
+    ): void {
+        try {
+            $salableQuantityInfo = [];
+            $salableQuantities = $this->objectManager->get(
+                \Magento\InventorySalesAdminUi\Model\GetSalableQuantityDataBySku::class
+            )->execute($sku);
+            foreach ($salableQuantities as $salableQuantity) {
+                $sourceCodes = [];
+                $stockId = (int) $salableQuantity['stock_id'];
+                $sources = $this->objectManager->get(
+                    \Magento\InventoryApi\Api\GetSourcesAssignedToStockOrderedByPriorityInterface::class
+                )->execute($stockId);
+                foreach ($sources as $source) {
+                    $sourceCodes[] = $source->getSourceCode();
+                }
+                $salableQuantityInfo[] = [
+                    'stock_id' => $stockId,
+                    'stock_name' => $salableQuantity['stock_name'],
+                    'qty' => (int) $salableQuantity['qty'],
+                    'manage_stock' => (int) $salableQuantity['manage_stock'],
+                    'source_codes' => implode(",", $sourceCodes),
+                ];
+            }
+            if (!empty($salableQuantityInfo)) {
+                $productData['salable_quantity_info'] = $salableQuantityInfo;
+            }
+        } catch (\Exception $e) {
+        }
+    }
+
+    /**
+     * Check MSI (Multi-Source Inventory) Status
+     *
+     * @return bool
+     */
+    public function isMSIEnabled()
+    {
+        return $this->moduleManager->isEnabled('Magento_Inventory');
     }
 }
