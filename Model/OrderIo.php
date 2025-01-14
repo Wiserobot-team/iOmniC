@@ -257,7 +257,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 continue;
             }
             $condition = array_map('trim', explode($operator, (string) $filterItem));
-            if (count($condition) != 2 || !$condition[0] || !$condition[1]) {
+            if (count($condition) !== 2 || empty($condition[0]) || empty($condition[1])) {
                 continue;
             }
             $fieldName = $condition[0];
@@ -266,6 +266,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 $message = "Field: 'filter' - column '{$fieldName}' doesn't exist in order table";
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
+            }
+            $operator = trim($operator);
+            if (in_array($operator, ['in', 'nin'])) {
+                $fieldValue = array_map('trim', explode(",", $fieldValue));
             }
             if ($fieldName === "updated_at") {
                 $orderCollection->addFieldToFilter(
@@ -317,9 +321,18 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function processFilter(string $string): string
     {
         $operators = [
-            ' eq ' => 'eq',
-            ' gt ' => 'gt',
-            ' le ' => 'le',
+            ' eq ' => ' eq ',
+            ' neq ' => ' neq ',
+            ' gt ' => ' gt ',
+            ' gteq ' => ' gteq ',
+            ' lt ' => ' lt ',
+            ' lteq ' => ' lteq ',
+            ' like ' => ' like ',
+            ' nlike ' => ' nlike ',
+            ' in ' => ' in ',
+            ' nin ' => ' nin ',
+            ' null ' => ' null ',
+            ' notnull ' => ' notnull ',
         ];
         foreach ($operators as $key => $operator) {
             if (strpos($string, $key) !== false) {
@@ -392,6 +405,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "updated_at" => $order->getData('updated_at'),
             "store_id" => $order->getData('store_id'),
             "entity_id" => $order->getData('entity_id'),
+            "increment_id" => $order->getData("increment_id"),
             "invoice_created_at" => $this->getInvoiceDate($order),
             "shipment_created_at" => $this->getShipmentDate($order),
             "creditmemo_created_at" => $this->getCreditMemoDate($order),

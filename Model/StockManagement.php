@@ -218,7 +218,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                 continue;
             }
             $condition = array_map('trim', explode($operator, $filterItem));
-            if (count($condition) != 2 || !$condition[0] || !$condition[1]) {
+            if (count($condition) !== 2 || empty($condition[0]) || empty($condition[1])) {
                 continue;
             }
             $fieldName = $condition[0];
@@ -230,7 +230,8 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
             }
-            if ($operator === "in" || $operator === "nin") {
+            $operator = trim($operator);
+            if (in_array($operator, ['in', 'nin'])) {
                 $fieldValue = array_map('trim', explode(",", $fieldValue));
             }
             $productCollection->addFieldToFilter(
@@ -249,18 +250,18 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     public function processFilter(string $string): string
     {
         $operators = [
-            ' eq ' => 'eq',
-            ' neq ' => 'neq',
-            ' gt ' => 'gt',
-            ' gteq ' => 'gteq',
-            ' lt ' => 'lt',
-            ' lteq ' => 'lteq',
-            ' like ' => 'like',
-            ' nlike ' => 'nlike',
-            ' in ' => 'in',
-            ' nin ' => 'nin',
-            ' null ' => 'null',
-            ' notnull ' => 'notnull',
+            ' eq ' => ' eq ',
+            ' neq ' => ' neq ',
+            ' gt ' => ' gt ',
+            ' gteq ' => ' gteq ',
+            ' lt ' => ' lt ',
+            ' lteq ' => ' lteq ',
+            ' like ' => ' like ',
+            ' nlike ' => ' nlike ',
+            ' in ' => ' in ',
+            ' nin ' => ' nin ',
+            ' null ' => ' null ',
+            ' notnull ' => ' notnull ',
         ];
         foreach ($operators as $key => $operator) {
             if (strpos($string, $key) !== false) {

@@ -262,7 +262,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
                 continue;
             }
             $condition = array_map('trim', explode($operator, (string) $filterItem));
-            if (count($condition) != 2 || !$condition[0] || !$condition[1]) {
+            if (count($condition) !== 2 || empty($condition[0]) || empty($condition[1])) {
                 continue;
             }
             $fieldName = $condition[0];
@@ -271,6 +271,10 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
                 $message = "Field: 'filter' - column '{$fieldName}' doesn't exist in shipment table";
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
+            }
+            $operator = trim($operator);
+            if (in_array($operator, ['in', 'nin'])) {
+                $fieldValue = array_map('trim', explode(",", $fieldValue));
             }
             if ($fieldName === "updated_at") {
                 $shipmentCollection->addFieldToFilter(
@@ -298,9 +302,18 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
     public function processFilter(string $string): string
     {
         $operators = [
-            ' eq ' => 'eq',
-            ' gt ' => 'gt',
-            ' le ' => 'le',
+            ' eq ' => ' eq ',
+            ' neq ' => ' neq ',
+            ' gt ' => ' gt ',
+            ' gteq ' => ' gteq ',
+            ' lt ' => ' lt ',
+            ' lteq ' => ' lteq ',
+            ' like ' => ' like ',
+            ' nlike ' => ' nlike ',
+            ' in ' => ' in ',
+            ' nin ' => ' nin ',
+            ' null ' => ' null ',
+            ' notnull ' => ' notnull ',
         ];
         foreach ($operators as $key => $operator) {
             if (strpos($string, $key) !== false) {
