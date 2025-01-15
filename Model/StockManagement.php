@@ -250,21 +250,21 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     public function processFilter(string $string): string
     {
         $operators = [
-            ' eq ' => ' eq ',
-            ' neq ' => ' neq ',
-            ' gt ' => ' gt ',
-            ' gteq ' => ' gteq ',
-            ' lt ' => ' lt ',
-            ' lteq ' => ' lteq ',
-            ' like ' => ' like ',
-            ' nlike ' => ' nlike ',
-            ' in ' => ' in ',
-            ' nin ' => ' nin ',
-            ' null ' => ' null ',
-            ' notnull ' => ' notnull ',
+            ' eq ',
+            ' neq ',
+            ' gt ',
+            ' gteq ',
+            ' lt ',
+            ' lteq ',
+            ' like ',
+            ' nlike ',
+            ' in ',
+            ' nin ',
+            ' null ',
+            ' notnull ',
         ];
-        foreach ($operators as $key => $operator) {
-            if (strpos($string, $key) !== false) {
+        foreach ($operators as $operator) {
+            if (strpos($string, $operator) !== false) {
                 return $operator;
             }
         }
