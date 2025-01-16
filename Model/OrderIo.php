@@ -426,8 +426,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "base_grand_total" => $order->getData('base_grand_total'),
             "total_paid" => $order->getData('total_paid'),
             "base_total_paid" => $order->getData('base_total_paid'),
-            "total_qty_ordered" => $order->getData('total_qty_ordered'),
-            "base_total_qty_ordered" => $order->getData('base_total_qty_ordered'),
+            "total_qty_ordered" => (int) $order->getData('total_qty_ordered'),
+            "base_total_qty_ordered" => (int) $order->getData('base_total_qty_ordered'),
             "base_currency_code" => $order->getData('base_currency_code'),
             "store_currency_code" => $order->getData('store_currency_code'),
             "order_currency_code" => $order->getData('order_currency_code'),
@@ -537,21 +537,22 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         $shippingAddress = $order->getShippingAddress();
-        if ($shippingRegionId = $shippingAddress->getData('region_id')) {
+        $shippingRegionId = $shippingAddress ? $shippingAddress->getData('region_id') : null;
+        if ($shippingRegionId) {
             $shippingRegion = $this->regionFactory->create()->load($shippingRegionId);
             $shippingRegionId = $shippingRegion->getId() ? $shippingRegion->getCode() : $shippingRegionId;
         }
         return [
-            "firstname" => $shippingAddress->getData("firstname"),
-            "lastname" => $shippingAddress->getData("lastname"),
-            "company" => $shippingAddress->getData("company"),
-            "street" => $shippingAddress->getData("street"),
-            "city" => $shippingAddress->getData("city"),
+            "firstname" => $shippingAddress ? $shippingAddress->getData("firstname") : null,
+            "lastname" => $shippingAddress ? $shippingAddress->getData("lastname") : null,
+            "company" => $shippingAddress ? $shippingAddress->getData("company") : null,
+            "street" => $shippingAddress ? $shippingAddress->getData("street") : null,
+            "city" => $shippingAddress ? $shippingAddress->getData("city") : null,
             "region_id" => $shippingRegionId,
-            "country_id" => $shippingAddress->getData("country_id"),
-            "region" => $shippingAddress->getData("region"),
-            "postcode" => $shippingAddress->getData("postcode"),
-            "telephone" => $shippingAddress->getData("telephone"),
+            "country_id" => $shippingAddress ? $shippingAddress->getData("country_id") : null,
+            "region" => $shippingAddress ? $shippingAddress->getData("region") : null,
+            "postcode" => $shippingAddress ? $shippingAddress->getData("postcode") : null,
+            "telephone" => $shippingAddress ? $shippingAddress->getData("telephone") : null,
             "shipping_method" => $order->getShippingMethod(),
             "shipping_title" => $order->getShippingDescription()
         ];
@@ -567,21 +568,22 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         $billingAddress = $order->getBillingAddress();
-        if ($billingRegionId = $billingAddress->getData('region_id')) {
+        $billingRegionId = $billingAddress ? $billingAddress->getData('region_id') : null;
+        if ($billingRegionId) {
             $billingRegion = $this->regionFactory->create()->load($billingRegionId);
             $billingRegionId = $billingRegion->getId() ? $billingRegion->getCode() : $billingRegionId;
         }
         return [
-            "firstname" => $billingAddress->getData("firstname"),
-            "lastname" => $billingAddress->getData("lastname"),
-            "company" => $billingAddress->getData("company"),
-            "street" => $billingAddress->getData("street"),
-            "city" => $billingAddress->getData("city"),
+            "firstname" => $billingAddress ? $billingAddress->getData("firstname") : null,
+            "lastname" => $billingAddress ? $billingAddress->getData("lastname") : null,
+            "company" => $billingAddress ? $billingAddress->getData("company") : null,
+            "street" => $billingAddress ? $billingAddress->getData("street") : null,
+            "city" => $billingAddress ? $billingAddress->getData("city") : null,
             "region_id" => $billingRegionId,
-            "country_id" => $billingAddress->getData("country_id"),
-            "region" => $billingAddress->getData("region"),
-            "postcode" => $billingAddress->getData("postcode"),
-            "telephone" => $billingAddress->getData("telephone")
+            "country_id" => $billingAddress ? $billingAddress->getData("country_id") : null,
+            "region" => $billingAddress ? $billingAddress->getData("region") : null,
+            "postcode" => $billingAddress ? $billingAddress->getData("postcode") : null,
+            "telephone" => $billingAddress ? $billingAddress->getData("telephone") : null
         ];
     }
 
@@ -602,7 +604,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     "sku" => $shipmentItem->getData("sku"),
                     "name" => $shipmentItem->getData("name"),
                     "price" => $shipmentItem->getData("price"),
-                    "qty" => $shipmentItem->getData("qty"),
+                    "qty" => (int) $shipmentItem->getData("qty"),
                     "weight" => $shipmentItem->getData("weight")
                 ];
             }
@@ -623,7 +625,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 "entity_id" => $shipment->getData("entity_id"),
                 "increment_id" => $shipment->getData("increment_id"),
                 "order_id" => $shipment->getData("order_id"),
-                "total_qty" => $shipment->getData("total_qty"),
+                "total_qty" => (int) $shipment->getData("total_qty"),
                 "total_weight" => $shipment->getData("total_weight"),
                 "item_info" => $itemsData,
                 "track_info" => $tracksData
@@ -652,7 +654,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     "base_price" => $refundItem->getData("base_price"),
                     "price_incl_tax" => $refundItem->getData("price_incl_tax"),
                     "base_price_incl_tax" => $refundItem->getData("base_price_incl_tax"),
-                    "qty" => $refundItem->getData("qty"),
+                    "qty" => (int) $refundItem->getData("qty"),
                     "tax_amount" => $refundItem->getData("tax_amount"),
                     "base_tax_amount" => $refundItem->getData("base_tax_amount"),
                     "discount_amount" => $refundItem->getData("discount_amount"),
