@@ -255,6 +255,40 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
+     * Filter Product Data by Stores
+     *
+     * @param string $stores
+     * @param string $select
+     * @param string $filter
+     * @param int $page
+     * @param int $limit
+     * @return array
+     */
+    public function getListByStores(
+        string $stores = "",
+        string $select = "*",
+        string $filter = "",
+        int $page = 1,
+        int $limit = 100
+    ): array {
+        $result = [];
+        $stores = trim($stores);
+        if (in_array($stores, ['', '*'])) {
+            $storeIds = array_keys($this->storeManager->getStores());
+        } else {
+            $storeIds = array_filter(array_map('trim', explode(",", $stores)), 'is_numeric');
+        }
+        foreach ($storeIds as $storeId) {
+            $storeId = (int) $storeId;
+            $productList = $this->getList($storeId, $select, $filter, $page, $limit);
+            if (!empty($productList)) {
+                $result['products'][$storeId] = array_values($productList);
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Get Store Info
      *
      * @param int $store
@@ -305,7 +339,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         string $select
     ): void {
         $select = trim($select);
-        if ($select === '' || $select === '*') {
+        if (in_array($select, ['', '*'])) {
             $this->selectAll = true;
             $productCollection->addAttributeToSelect('*');
         } else {

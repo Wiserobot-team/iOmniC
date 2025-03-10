@@ -21,6 +21,12 @@
             <resource ref="Magento_Catalog::products" />
         </resources>
     </route>
+    <route url="/V1/io/products/stores" method="POST">
+        <service class="WiseRobot\Io\Api\ProductIoInterface" method="getListByStores" />
+        <resources>
+            <resource ref="Magento_Catalog::products" />
+        </resources>
+    </route>
     <route url="/V1/io/products/import" method="POST">
         <service class="WiseRobot\Io\Api\ProductManagementInterface" method="import" />
         <resources>

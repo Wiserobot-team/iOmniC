@@ -34,4 +34,22 @@ interface ProductIoInterface
         int $page = 1,
         int $limit = 100
     ): array;
+
+    /**
+     * Filter Products by Stores
+     *
+     * @param string $stores
+     * @param string $select
+     * @param string $filter
+     * @param int $page
+     * @param int $limit
+     * @return array
+     */
+    public function getListByStores(
+        string $stores = "",
+        string $select = "*",
+        string $filter = "",
+        int $page = 1,
+        int $limit = 100
+    ): array;
 }
