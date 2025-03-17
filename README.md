@@ -1,5 +1,5 @@
 ## iOmniC
-iOmniC provides near real-time connectivity to multiple platforms (ChannelAdvisor, Magento 2, etc.).
+iOmniC provides near real-time connectivity to multiple platforms (Rithum, Magento 2, etc.).
 No more time consuming manual updates necessary. All your Products, Orders, and Fulfillment are automatically synced between platforms within minutes. Our admin UI will help you track the status, details, timestamps, and completion levels of your data. Any transfer errors will show in the dashboard and via email digest with hints on how to fix in your data. You decide the flow of data, and can create/enable/disable/remove any automated process easily.
 
 Near real-time synchronization

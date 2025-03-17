@@ -28,17 +28,19 @@
     "sales_order": {
         "column": {
             "io_order_id": true,
-            "io_marketplace": true,
+            "site_order_id": true,
             "ca_order_id": true,
-            "buyer_user_id": true
+            "buyer_user_id": true,
+            "io_marketplace": true
         }
     },
     "sales_order_grid": {
         "column": {
             "io_order_id": true,
-            "io_marketplace": true,
+            "site_order_id": true,
             "ca_order_id": true,
-            "buyer_user_id": true
+            "buyer_user_id": true,
+            "io_marketplace": true
         }
     },
     "sales_order_item": {

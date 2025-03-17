@@ -282,145 +282,69 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         mixed $shipmentInfo = [],
         mixed $refundInfo = []
     ): array {
-        $errorMess = "data request error";
         // store info
         if (!$store) {
-            $message = "Field: 'store' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+            $this->handleValidationError("Field: 'store' is a required field");
         }
         try {
             $storeInfo = $this->storeManager->getStore($store);
         } catch (\Exception $e) {
-            $message = "Requested 'store' " . $store . " doesn't exist";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+            $this->handleValidationError("Requested 'store' " . $store . " doesn't exist");
         }
 
-        // order info
-        if (!$orderInfo) {
-            $message = "Field: 'order_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($orderInfo["io_order_id"]) || !$orderInfo["io_order_id"]) {
-            $message = "Field: 'order_info' - 'io_order_id' data is a required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($orderInfo["ca_order_id"]) || !$orderInfo["ca_order_id"]) {
-            $message = "Field: 'order_info' - 'ca_order_id' data is a required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($orderInfo["order_time_gmt"]) || !$orderInfo["order_time_gmt"]
-            || !isset($orderInfo["email"]) || !$orderInfo["email"]
-            || !isset($orderInfo["item_sale_source"]) || !$orderInfo["item_sale_source"]
-            || !isset($orderInfo["checkout_status"]) || !$orderInfo["checkout_status"]
-            || !isset($orderInfo["shipping_status"]) || !$orderInfo["shipping_status"]
-            || !isset($orderInfo["refund_status"]) || !$orderInfo["refund_status"]
-            || !isset($orderInfo["grand_total"]) || !isset($orderInfo["tax_amount"])
-            || !isset($orderInfo["shipping_amount"]) || !isset($orderInfo["shipping_tax_amount"])
-            || !isset($orderInfo["discount_amount"])) {
-            $message = "Field: 'order_info' - {order_time_gmt', 'email', 'item_sale_source'
-            , 'grand_total' , 'tax_amount', 'shipping_amount', 'shipping_tax_amount'
-            , 'discount_amount', 'checkout_status', 'shipping_status'
-            , 'refund_status'} data fields are required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        // payment info
-        if (!$paymentInfo) {
-            $message = "Field: 'payment_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($paymentInfo["payment_method"]) || !$paymentInfo["payment_method"] ||
-            !isset($paymentInfo["cc_last4"])) {
-            $message = "Field: 'payment_info' - {'payment_method', 'cc_last4'} data fields are required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        // shipping info
-        if (!$shippingInfo) {
-            $message = "Field: 'shipping_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($shippingInfo["firstname"]) || !isset($shippingInfo["lastname"]) ||
-            !isset($shippingInfo["company"]) || !isset($shippingInfo["street"]) ||
-            !isset($shippingInfo["city"]) || !isset($shippingInfo["region_id"]) ||
-            !isset($shippingInfo["country_id"]) || !isset($shippingInfo["region"]) ||
-            !isset($shippingInfo["postcode"]) || !isset($shippingInfo["telephone"]) ||
-            !isset($shippingInfo["shipping_method"])) {
-            $message = "Field: 'shipping_info' - {'firstname', 'lastname', 'company', 'street', 'city', 'region_id'
-            , 'country_id', 'region', 'postcode', 'telephone', 'shipping_method'} data fields are required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        // billing info
-        if (!$billingInfo) {
-            $message = "Field: 'billing_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($billingInfo["firstname"]) || !isset($billingInfo["lastname"]) ||
-            !isset($billingInfo["company"]) || !isset($billingInfo["street"]) ||
-            !isset($billingInfo["city"]) || !isset($billingInfo["region_id"]) ||
-            !isset($billingInfo["country_id"]) || !isset($billingInfo["region"]) ||
-            !isset($billingInfo["postcode"]) || !isset($billingInfo["telephone"])) {
-            $message = "Field: 'billing_info' - {'firstname', 'lastname', 'company', 'street', 'city', 'region_id'
-            , 'country_id', 'region', 'postcode', 'telephone'} data fields are required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        // item info
-        if (!$itemInfo || !count($itemInfo)) {
-            $message = "Field: 'item_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        foreach ($itemInfo as $item) {
-            if (!isset($item["id"]) || !isset($item["sku"]) || !$item["sku"] ||
-                !isset($item["name"]) || !$item["name"] || !isset($item["price"]) ||
-                !isset($item["qty"]) || !isset($item["tax_percent"]) || !isset($item["tax_amount"]) ||
-                !isset($item["weight"])) {
-                $message = "Field: 'item_info' - {'id', 'sku', 'name', 'price', 'qty', 'tax_percent'
-                , 'tax_amount', 'weight'} data fields are required";
-                $this->results["response"]["data"]["error"][] = $message;
-                $this->log("ERROR: " . $message);
-                $this->cleanResponseMessages();
-                throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+        $validationRules = [
+            "order_info" => [
+                2 => [
+                    "io_order_id", "order_time_gmt", "email", "item_sale_source",
+                    "checkout_status", "shipping_status", "refund_status"
+                ],
+                3 => [
+                    "grand_total", "tax_amount", "shipping_amount",
+                    "shipping_tax_amount", "discount_amount"
+                ]
+            ],
+            "payment_info" => [
+                1 => ["cc_last4"],
+                2 => ["payment_method"]
+            ],
+            "shipping_info" => [
+                1 => [
+                    "firstname", "lastname", "company", "street", "city", "region_id",
+                    "country_id", "region", "postcode", "telephone", "shipping_method"
+                ]
+            ],
+            "billing_info" => [
+                1 => [
+                    "firstname", "lastname", "company", "street", "city", "region_id",
+                    "country_id", "region", "postcode", "telephone"
+                ]
+            ],
+            "item_info" => [
+                1 => ["id"],
+                2 => ["sku", "name"],
+                3 => ["price", "qty", "tax_percent", "tax_amount", "weight"]
+            ]
+        ];
+        foreach ($validationRules as $fieldName => $rules) {
+            $camelCaseName = $this->snakeToCamelCase($fieldName);
+            $data = $$camelCaseName ?? null;
+            if ($fieldName === "item_info") {
+                if (empty($data)) {
+                    $this->handleValidationError("Field: 'item_info' is a required field");
+                }
+                foreach ($data as $item) {
+                    foreach ($rules as $type => $fields) {
+                        if ($message = $this->validateFields($item, $fieldName, $fields, $type)) {
+                            $this->handleValidationError($message);
+                        }
+                    }
+                }
+            } else {
+                foreach ($rules as $type => $fields) {
+                    if ($message = $this->validateFields($data, $fieldName, $fields, $type)) {
+                        $this->handleValidationError($message);
+                    }
+                }
             }
         }
 
@@ -443,6 +367,67 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             $errorMess = "order import error";
             throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
         }
+    }
+
+    /**
+     * Validates fields
+     *
+     * @param array|null $data
+     * @param string $fieldName
+     * @param array $fields
+     * @param int $type
+     * @return string|null
+     */
+    public function validateFields(
+        ?array $data,
+        string $fieldName,
+        array $fields,
+        int $type = 1
+    ): ?string {
+        if (!$data) {
+            return "Field: '{$fieldName}' is a required field";
+        }
+        $validators = [
+            1 => fn($field) => !isset($data[$field]),
+            2 => fn($field) => empty($data[$field]),
+            3 => fn($field) => !isset($data[$field]) || !is_numeric($data[$field])
+        ];
+        $errorFields = array_filter($fields, $validators[$type] ?? fn() => false);
+        return $errorFields
+            ? "Field: '{$fieldName}' - {" . implode(", ", $errorFields) . "} data fields are required"
+            : null;
+    }
+
+    /**
+     * Converts a snake_case string to camelCase.
+     *
+     * @param string $string
+     * @return string
+     */
+    public function snakeToCamelCase(string $string): string
+    {
+        return preg_replace_callback(
+            '/_([a-z])/',
+            function ($matches) {
+                return strtoupper($matches[1]);
+            },
+            $string
+        );
+    }
+
+    /**
+     * Handles validation errors
+     *
+     * @param string $message
+     * @return void
+     */
+    public function handleValidationError(string $message): void
+    {
+        $errorMess = "Data request error";
+        $this->results["response"]["data"]["error"][] = $message;
+        $this->log("ERROR: " . $message);
+        $this->cleanResponseMessages();
+        throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
     }
 
     /**
@@ -472,19 +457,13 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
     ): bool {
         $storeId = (int) $store->getId();
         $ioOrderId = $orderInfo["io_order_id"];
-        $caOrderId = $orderInfo["ca_order_id"];
-        $buyerUserID = !empty($orderInfo["buyer_user_id"]) ? $orderInfo["buyer_user_id"] : $orderInfo["email"];
+        $siteOrderId = $orderInfo["site_order_id"] ?? '';
+        $caOrderId = $orderInfo["ca_order_id"] ?? '';
+        $buyerUserID = $orderInfo["buyer_user_id"] ?? $orderInfo["email"];
         $itemSaleSource = $orderInfo["item_sale_source"];
 
-        $this->isTaxInclusive = false;
-        if (!empty($orderInfo["order_tax_type"])) {
-            $this->isTaxInclusive = true;
-        }
-
-        $this->originalPriceInclTax = false;
-        if (!empty($orderInfo["original_price_type"])) {
-            $this->originalPriceInclTax = true;
-        }
+        $this->isTaxInclusive = !empty($orderInfo["order_tax_type"]);
+        $this->originalPriceInclTax = !empty($orderInfo["original_price_type"]);
 
         try {
             // order items
@@ -910,14 +889,15 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
 
             // set custom order columns
             $newOrder->setData("io_order_id", $ioOrderId);
+            $newOrder->setData("site_order_id", $siteOrderId);
             $newOrder->setData("ca_order_id", $caOrderId);
             $newOrder->setData("buyer_user_id", $buyerUserID);
             $newOrder->setData("io_marketplace", $itemSaleSource);
 
             // add comment
             if (!$isOldOrder) {
-                $statusMessage  = "Marketplace: " . $itemSaleSource . ", ChannelAdvisor Order ID: " .
-                    $caOrderId . ", Site Order ID: " . $ioOrderId . ", Buyer User ID: " . $buyerUserID;
+                $statusMessage  = "Marketplace: " . $itemSaleSource . ", Rithum Order ID: " .
+                    $caOrderId . ", Site Order ID: " . $siteOrderId . ", Buyer User ID: " . $buyerUserID;
                 $newOrder->addStatusHistoryComment($statusMessage);
             }
 

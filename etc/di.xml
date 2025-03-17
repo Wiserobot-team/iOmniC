@@ -23,6 +23,7 @@
         <arguments>
             <argument name="columns" xsi:type="array">
                 <item name="io_order_id" xsi:type="string">sales_order.io_order_id</item>
+                <item name="site_order_id" xsi:type="string">sales_order.site_order_id</item>
                 <item name="ca_order_id" xsi:type="string">sales_order.io_order_id</item>
                 <item name="buyer_user_id" xsi:type="string">sales_order.buyer_user_id</item>
                 <item name="io_marketplace" xsi:type="string">sales_order.io_marketplace</item>

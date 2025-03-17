@@ -24,6 +24,19 @@
                     <item name="visible" xsi:type="boolean">true</item>
                     <item name="dataType" xsi:type="string">text</item>
                     <item name="align" xsi:type="string">left</item>
+                    <item name="label" xsi:type="string" translate="true">Io Order ID</item>
+                </item>
+            </argument>
+        </column>
+        <column name="site_order_id">
+            <argument name="data" xsi:type="array">
+                <item name="js_config" xsi:type="array">
+                    <item name="component" xsi:type="string">Magento_Ui/js/grid/columns/column</item>
+                </item>
+                <item name="config" xsi:type="array">
+                    <item name="visible" xsi:type="boolean">true</item>
+                    <item name="dataType" xsi:type="string">text</item>
+                    <item name="align" xsi:type="string">left</item>
                     <item name="label" xsi:type="string" translate="true">Io Site Order ID</item>
                 </item>
             </argument>
@@ -37,7 +50,7 @@
                     <item name="visible" xsi:type="boolean">true</item>
                     <item name="dataType" xsi:type="string">text</item>
                     <item name="align" xsi:type="string">left</item>
-                    <item name="label" xsi:type="string" translate="true">Io ChannelAdvisor Order ID</item>
+                    <item name="label" xsi:type="string" translate="true">Io Rithum Order ID</item>
                 </item>
             </argument>
         </column>

@@ -1,6 +1,6 @@
 {
   "name": "wiserobot/module-iomnic",
-  "description": "WiseRobot iOmniC provides near real-time connectivity to multiple platforms (ChannelAdvisor, Magento 2, etc.)",
+  "description": "WiseRobot iOmniC provides near real-time connectivity to multiple platforms (Rithum, Magento 2, etc.)",
   "require": {
     "php": "~8.0.0||~8.1.0||~8.2.0||~8.3.0",
     "magento/framework": "^102.0||^103.0"

@@ -391,6 +391,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             // Basic order details
             "order_id" => $order->getIncrementId(),
             "io_order_id" => $order->getData('io_order_id'),
+            "site_order_id" => $order->getData('site_order_id'),
             "ca_order_id" => $order->getData('ca_order_id'),
             // Customer details
             "email" => $order->getData('customer_email'),
