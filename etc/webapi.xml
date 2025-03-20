@@ -130,4 +130,29 @@
             <resource ref="Magento_Sales::sales" />
         </resources>
     </route>
+    <!-- Order Sync Service -->
+    <route url="/V1/io/orders-sync/:id" method="GET">
+        <service class="WiseRobot\Io\Api\OrderSyncInterface" method="getById" />
+        <resources>
+            <resource ref="Magento_Sales::sales" />
+        </resources>
+    </route>
+    <route url="/V1/io/orders-sync/increment-id/:incrementId" method="GET">
+        <service class="WiseRobot\Io\Api\OrderSyncInterface" method="getByIncrementId" />
+        <resources>
+            <resource ref="Magento_Sales::sales" />
+        </resources>
+    </route>
+    <route url="/V1/io/orders-sync/:id" method="DELETE">
+        <service class="WiseRobot\Io\Api\OrderSyncInterface" method="deleteById" />
+        <resources>
+            <resource ref="Magento_Sales::sales" />
+        </resources>
+    </route>
+    <route url="/V1/io/orders-sync/increment-id/:incrementId" method="DELETE">
+        <service class="WiseRobot\Io\Api\OrderSyncInterface" method="deleteByIncrementId" />
+        <resources>
+            <resource ref="Magento_Sales::sales" />
+        </resources>
+    </route>
 </routes>

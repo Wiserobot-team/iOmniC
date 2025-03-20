@@ -19,6 +19,7 @@
     <preference for="WiseRobot\Io\Api\OrderManagementInterface" type="WiseRobot\Io\Model\OrderManagement" />
     <preference for="WiseRobot\Io\Api\ShipmentManagementInterface" type="WiseRobot\Io\Model\ShipmentManagement" />
     <preference for="WiseRobot\Io\Api\RefundManagementInterface" type="WiseRobot\Io\Model\RefundManagement" />
+    <preference for="WiseRobot\Io\Api\OrderSyncInterface" type="WiseRobot\Io\Model\OrderSync" />
     <virtualType name="Magento\Sales\Model\ResourceModel\Order\Grid" type="Magento\Sales\Model\ResourceModel\Grid">
         <arguments>
             <argument name="columns" xsi:type="array">
