@@ -42,10 +42,5 @@
             "buyer_user_id": true,
             "io_marketplace": true
         }
-    },
-    "sales_order_item": {
-        "column": {
-            "site_order_item_id": true
-        }
     }
 }

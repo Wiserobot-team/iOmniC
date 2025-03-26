@@ -53,7 +53,4 @@
         <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Buyer User ID"/>
         <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io Marketplace Source"/>
     </table>
-    <table name="sales_order_item" resource="sales" engine="innodb" comment="Sales Flat Order Item">
-        <column xsi:type="varchar" name="site_order_item_id" nullable="true" comment="Io Site Order Item ID"/>
-    </table>
 </schema>

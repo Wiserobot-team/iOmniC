@@ -1276,9 +1276,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $orderItem->setData("weee_tax_row_disposition", 0);
         $orderItem->setData("base_weee_tax_disposition", 0);
         $orderItem->setData("base_weee_tax_row_disposition", 0);
-
-        $orderItem->setData("site_order_item_id", $item["id"]);
-
         if ($this->isTaxInclusive) {
             $rowTax = (float) $item["tax_amount"];
             $itemTax = $rowTax / (int) $item["qty"];
@@ -1340,7 +1337,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $mageOrderItem->setData("weee_tax_row_disposition", 0);
         $mageOrderItem->setData("base_weee_tax_disposition", 0);
         $mageOrderItem->setData("base_weee_tax_row_disposition", 0);
-        $mageOrderItem->setData("site_order_item_id", $orderItem->getData("site_order_item_id"));
         $mageOrderItem->setData("tax_amount", $orderItem->getData("tax_amount"));
         $mageOrderItem->setData("base_tax_amount", $orderItem->getData("base_tax_amount"));
         $mageOrderItem->setData('tax_percent', $orderItem->getData('tax_percent'));
