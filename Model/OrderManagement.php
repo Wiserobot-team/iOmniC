@@ -733,16 +733,12 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
 
             // set shipping method
             $mageShippingMethods = $this->getMagentoShippingMethods();
-            if (!count($mageShippingMethods)) {
-                $mageShippingMethods = $this->getAllMagentoShippingMethods();
-            }
             $defaultShippingMethod = key($mageShippingMethods);
             $ioShippingMethod = $shippingInfo["shipping_method"];
             if (!$ioShippingMethod || !isset($mageShippingMethods[$ioShippingMethod])) {
                 $ioShippingMethod = $defaultShippingMethod;
             }
             $ioShippingDescription = $mageShippingMethods[$ioShippingMethod];
-
             if ($ioShippingMethod && $ioShippingDescription) {
                 if (!$isOldOrder) {
                     if ($skuIsMissing) {
@@ -1442,37 +1438,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
     public function getMagentoShippingMethods(): array
     {
         $shipMethods = [];
-        $activeCarriers = $this->shippingConfig->getActiveCarriers();
-        foreach ($activeCarriers as $carrierCode => $carrierModel) {
-            $carrierTitle = $this->scopeConfig->getValue(
-                'carriers/' . $carrierCode . '/title'
-            );
-            if ($carrierMethods = $carrierModel->getAllowedMethods()) {
-                foreach ($carrierMethods as $methodCode => $methodLabel) {
-                    if (is_array($methodLabel)) {
-                        foreach ($methodLabel as $methodLabelKey => $methodLabelValue) {
-                            $shipMethods[$methodLabelKey] = $methodLabelValue;
-                        }
-                    } else {
-                        $shipMethod = $carrierCode . "_" . $methodCode;
-                        $shipMethodTitle = $carrierTitle . " - " . $methodLabel;
-                        $shipMethods[$shipMethod] = $shipMethodTitle;
-                    }
-                }
-            }
-        }
-
-        return $shipMethods;
-    }
-
-    /**
-     * Get Magento Shipping Methods
-     *
-     * @return array
-     */
-    public function getAllMagentoShippingMethods(): array
-    {
-        $shipMethods = [];
         $activeCarriers = $this->shippingConfig->getAllCarriers();
         foreach ($activeCarriers as $carrierCode => $carrierModel) {
             $carrierTitle = $this->scopeConfig->getValue(
@@ -1497,7 +1462,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
     }
 
     /**
-     * Get Magento Payment Methods
+     * Get Payment Methods
      *
      * @return array
      */

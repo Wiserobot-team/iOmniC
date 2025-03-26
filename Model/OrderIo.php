@@ -870,7 +870,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getShippingMethods(): array
     {
         $shipMethods = [];
-        $activeCarriers = $this->shippingConfig->getActiveCarriers();
+        $activeCarriers = $this->shippingConfig->getAllCarriers();
         foreach ($activeCarriers as $carrierCode => $carrierModel) {
             $carrierTitle = $this->scopeConfig->getValue("carriers/$carrierCode/title");
             $carrierMethods = $carrierModel->getAllowedMethods();
