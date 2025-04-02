@@ -330,32 +330,29 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         array &$stockData,
         string $sku
     ): void {
-        try {
-            $sourceItemsInfo = [];
-            $sourceItems = $this->objectManager->get(
-                \Magento\InventoryApi\Api\GetSourceItemsBySkuInterface::class
-            )->execute($sku);
-            foreach ($sourceItems as $sourceItem) {
-                $sourceCode = $sourceItem->getData('source_code');
-                 try {
-                    $source = $this->objectManager->get(
-                        \Magento\InventoryApi\Api\SourceRepositoryInterface::class
-                    )->get($sourceCode);
-                } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
-                    continue;
-                }
-                $sourceItemsInfo[] = [
-                    'source_item_id' => (int) $sourceItem->getData('source_item_id'),
-                    'source_code' => $sourceCode,
-                    'source_name' => $source->getName(),
-                    'quantity' => (int) $sourceItem->getData('quantity'),
-                    'status' => (int) $sourceItem->getData('status'),
-                ];
+        $sourceItemsInfo = [];
+        $sourceItems = $this->objectManager->get(
+            \Magento\InventoryApi\Api\GetSourceItemsBySkuInterface::class
+        )->execute($sku);
+        foreach ($sourceItems as $sourceItem) {
+            $sourceCode = $sourceItem->getData('source_code');
+            try {
+                $source = $this->objectManager->get(
+                    \Magento\InventoryApi\Api\SourceRepositoryInterface::class
+                )->get($sourceCode);
+            } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
+                continue;
             }
-            if (!empty($sourceItemsInfo)) {
-                $stockData['source_items_info'] = $sourceItemsInfo;
-            }
-        } catch (\Exception $e) {
+            $sourceItemsInfo[] = [
+                'source_item_id' => (int) $sourceItem->getData('source_item_id'),
+                'source_code' => $sourceCode,
+                'source_name' => $source->getName(),
+                'quantity' => (int) $sourceItem->getData('quantity'),
+                'status' => (int) $sourceItem->getData('status'),
+            ];
+        }
+        if (!empty($sourceItemsInfo)) {
+            $stockData['source_items_info'] = $sourceItemsInfo;
         }
     }
 
@@ -370,32 +367,29 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         array &$stockData,
         string $sku
     ): void {
-        try {
-            $salableQuantityInfo = [];
-            $salableQuantities = $this->objectManager->get(
-                \Magento\InventorySalesAdminUi\Model\GetSalableQuantityDataBySku::class
-            )->execute($sku);
-            foreach ($salableQuantities as $salableQuantity) {
-                $sourceCodes = [];
-                $stockId = (int) $salableQuantity['stock_id'];
-                $sources = $this->objectManager->get(
-                    \Magento\InventoryApi\Api\GetSourcesAssignedToStockOrderedByPriorityInterface::class
-                )->execute($stockId);
-                foreach ($sources as $source) {
-                    $sourceCodes[] = $source->getSourceCode();
-                }
-                $salableQuantityInfo[] = [
-                    'stock_id' => $stockId,
-                    'stock_name' => $salableQuantity['stock_name'],
-                    'qty' => (int) $salableQuantity['qty'],
-                    'manage_stock' => (int) $salableQuantity['manage_stock'],
-                    'source_codes' => implode(",", $sourceCodes),
-                ];
+        $salableQuantityInfo = [];
+        $salableQuantities = $this->objectManager->get(
+            \Magento\InventorySalesAdminUi\Model\GetSalableQuantityDataBySku::class
+        )->execute($sku);
+        foreach ($salableQuantities as $salableQuantity) {
+            $sourceCodes = [];
+            $stockId = (int) $salableQuantity['stock_id'];
+            $sources = $this->objectManager->get(
+                \Magento\InventoryApi\Api\GetSourcesAssignedToStockOrderedByPriorityInterface::class
+            )->execute($stockId);
+            foreach ($sources as $source) {
+                $sourceCodes[] = $source->getSourceCode();
             }
-            if (!empty($salableQuantityInfo)) {
-                $stockData['salable_quantity_info'] = $salableQuantityInfo;
-            }
-        } catch (\Exception $e) {
+            $salableQuantityInfo[] = [
+                'stock_id' => $stockId,
+                'stock_name' => $salableQuantity['stock_name'],
+                'qty' => (int) $salableQuantity['qty'],
+                'manage_stock' => (int) $salableQuantity['manage_stock'],
+                'source_codes' => implode(",", $sourceCodes),
+            ];
+        }
+        if (!empty($salableQuantityInfo)) {
+            $stockData['salable_quantity_info'] = $salableQuantityInfo;
         }
     }
 

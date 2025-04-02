@@ -82,7 +82,7 @@ class OrderSync implements \WiseRobot\Io\Api\OrderSyncInterface
     /**
      * Get Order Sync Info
      *
-     * @param \WiseRobot\Io\Model\IoOrder $ioOrder
+     * @param \WiseRobot\Io\Model\IoOrder $orderSync
      * @return array
      */
     public function getOrderSyncInfo(
@@ -140,7 +140,7 @@ class OrderSync implements \WiseRobot\Io\Api\OrderSyncInterface
             $message = "Order sync {$typeId}: {$id} was successfully deleted";
             $this->results["response"]["data"]["success"][] = $message;
         } catch (\Exception $e) {
-            $message = "Delete order sync {$typeId}: {$id} - {$e->getMessage()}";
+            $message = "Error deleting order sync {$typeId}: {$id} - {$e->getMessage()}";
             $this->handleValidationError($message);
         }
         return $this->results;
@@ -154,7 +154,7 @@ class OrderSync implements \WiseRobot\Io\Api\OrderSyncInterface
      */
     public function handleValidationError(string $message): void
     {
-        $errorMess = "Delete order sync error";
+        $errorMess = "Error deleting order sync";
         $this->results["response"]["data"]["error"][] = $message;
         throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
     }
