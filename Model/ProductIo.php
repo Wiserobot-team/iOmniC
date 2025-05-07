@@ -320,7 +320,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             ->joinTable(
                 [$this->resourceConnection->getTableName('cataloginventory_stock_item')],
                 'product_id=entity_id',
-                ['qty', 'min_sale_qty'],
+                ['qty', 'min_sale_qty', 'is_in_stock'],
                 'stock_id = 1',
                 'left'
             );
@@ -1056,7 +1056,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $minCartQty = (int) $product->getData("min_sale_qty");
         $productData['stock_info'] = [
             "qty" => $qty ?: null,
-            "min_cart_qty" => $minCartQty ?: null
+            "min_cart_qty" => $minCartQty ?: null,
+            "is_in_stock" => (int) $product->getData("is_in_stock"),
         ];
     }
 

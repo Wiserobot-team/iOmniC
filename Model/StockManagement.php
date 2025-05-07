@@ -196,7 +196,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     public function applySelectAttributes(
         \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection
     ): void {
-        $productCollection->addAttributeToSelect(['entity_id', 'sku', 'created_at', 'updated_at']);
+        $productCollection->addAttributeToSelect(['entity_id', 'sku', 'created_at', 'updated_at', 'status']);
     }
 
     /**
@@ -299,6 +299,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         \Magento\Catalog\Model\Product $product
     ): array {
         $productSku = $product->getData("sku");
+        $status = $product->getData("status");
         $qty = (int) $product->getData("qty");
         $minCartQty = (int) $product->getData("min_sale_qty");
         $stockData = [
@@ -308,8 +309,12 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                 'sku' => $productSku,
                 'created_at' => $product->getData("created_at"),
                 'updated_at' => $product->getData("updated_at"),
+                'status' => $status == 2 ? 'Disabled' : 'Enabled',
+                'website_ids' => implode(",", $product->getWebsiteIds()),
+                'store_ids' => implode(",", $product->getStoreIds()),
                 "qty" => $qty ?: null,
                 "min_cart_qty" => $minCartQty ?: null,
+                "is_in_stock" => (int) $product->getData("is_in_stock"),
             ]
         ];
         if ($this->isMSIEnabled()) {
