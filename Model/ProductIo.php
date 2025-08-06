@@ -1038,6 +1038,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 $productData['tier_prices_info'] = $tierPricesInfo;
             }
         } catch (\Exception $e) {
+            $this->log("Failed to get tier prices for sku '{$sku}': " . $e->getMessage());
         }
     }
 
