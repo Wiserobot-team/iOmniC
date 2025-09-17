@@ -782,7 +782,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $newOrder->setData("shipping_description", $ioShippingDescription);
             }
 
-            // udate existing order items in the current order
+            // update existing order items in the current order
             if (!$isOldOrder && !$skuIsMissing) {
                 if (empty($orderInfo["order_item_type"])) {
                     $mageOrderItems = $newOrder->getItemsCollection();
@@ -1039,7 +1039,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             "postcode" => $shippingInfo["postcode"],
             "telephone" => $shippingInfo["telephone"],
         ];
-
         if (trim((string) $data["telephone"]) == "") {
             $data["telephone"] = 0000;
         }
@@ -1049,7 +1048,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         if (trim((string) $data["firstname"]) == "") {
             $data["firstname"] = $data["lastname"];
         }
-
         if ($countryCode && $shippingInfo["region_id"]) {
             $regionModel = $this->regionFactory->create()
                 ->loadByCode($shippingInfo["region_id"], $countryCode);
@@ -1060,18 +1058,14 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $data["region_id"] = null;
             }
         }
-
         if ($create) {
             $shippingAddress = $this->addressInterfaceFactory->create();
         } else {
             $shippingAddress = $this->orderAddressFactory->create();
         }
-
         $data = $this->fixAddressData($data);
-
         $shippingAddress->setStoreId($storeId);
         $shippingAddress->setData($data);
-
         return $shippingAddress;
     }
 
@@ -1103,25 +1097,21 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $billingInfo["region_id"] = "PR";
             }
         }
-
         if (!$billingInfo["firstname"]) {
             $firstName = $shippingInfo["firstname"];
         } else {
             $firstName = $billingInfo["firstname"];
         }
-
         if (!$billingInfo["lastname"]) {
             $lastName = $shippingInfo["lastname"];
         } else {
             $lastName = $billingInfo["lastname"];
         }
-
         if (!$billingInfo["company"]) {
             $companyName = $shippingInfo["company"];
         } else {
             $companyName = $billingInfo["company"];
         }
-
         $billingStreetAddr = $billingInfo["street"];
         $shipingStreetAddr = $shippingInfo["street"];
         if (!$billingStreetAddr) {
@@ -1129,37 +1119,31 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         } else {
             $address = $billingStreetAddr;
         }
-
         if (!$billingInfo["city"]) {
             $city = $shippingInfo["city"];
         } else {
             $city = $billingInfo["city"];
         }
-
         if (!$billingInfo["region_id"]) {
             $region = $shippingInfo["region_id"];
         } else {
             $region = $billingInfo["region_id"];
         }
-
         if (!$billingInfo["region"]) {
             $regionDescription = $shippingInfo["region"];
         } else {
             $regionDescription = $billingInfo["region"];
         }
-
         if (!$billingInfo["postcode"]) {
             $postalCode = $shippingInfo["postcode"];
         } else {
             $postalCode = $billingInfo["postcode"];
         }
-
         if (!$billingInfo["telephone"]) {
             $phoneNumberDay = $shippingInfo["telephone"];
         } else {
             $phoneNumberDay = $billingInfo["telephone"];
         }
-
         if (trim((string) $phoneNumberDay) == "") {
             $phoneNumberDay = 0000;
         }
@@ -1169,7 +1153,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         if (trim((string) $firstName) == "") {
             $firstName = $lastName;
         }
-
         $data = [
             "firstname" => $firstName,
             "lastname" => $lastName,
@@ -1182,7 +1165,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             "postcode" => $postalCode,
             "telephone" => $phoneNumberDay,
         ];
-
         if ($countryCode && $region) {
             $regionModel = $this->regionFactory->create()
                 ->loadByCode($region, $countryCode);
@@ -1193,18 +1175,14 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $data["region_id"] = null;
             }
         }
-
         if ($create) {
             $billingAddress = $this->addressInterfaceFactory->create();
         } else {
             $billingAddress = $this->orderAddressFactory->create();
         }
-
         $data = $this->fixAddressData($data);
-
         $billingAddress->setStoreId($storeId);
         $billingAddress->setData($data);
-
         return $billingAddress;
     }
 
@@ -1222,13 +1200,11 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $regionCode = "HR-08";
             }
         }
-
         if ($data['country_id'] == "CH" && !$data['region_id']) {
             if (trim((string) $data['city']) == 'Geneva') {
                 $regionCode = "GE";
             }
         }
-
         if ($data['country_id'] == "AT" && !$data['region_id']) {
             $regions = [
                 'Wien' => 'WI',
@@ -1241,16 +1217,13 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 'Burgenland' => "BL",
                 'Vorarlberg' => "VB"
             ];
-
             if (isset($regions[trim((string) $data['region'])])) {
                 $regionCode = $regions[trim((string) $data['region'])];
             }
-
             if (trim((string) $data['city']) == 'Pfarrkirchen') {
                 $regionCode = "OO";
             }
         }
-
         if ($regionCode) {
             $regionModel = $this->regionFactory->create()
                                 ->loadByCode($regionCode, $data['country_id']);
@@ -1259,7 +1232,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $data["region"] = $regionModel->getData("name");
             }
         }
-
         return $data;
     }
 
@@ -1328,7 +1300,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             ->setData("base_row_total", $rowTotal)
             ->setData("row_total_incl_tax", $rowTotalInclTax)
             ->setData("base_row_total_incl_tax", $rowTotalInclTax);
-
         return $orderItem;
     }
 
@@ -1349,7 +1320,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 return 1;
             }
         }
-
         return 0;
     }
 
@@ -1374,7 +1344,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         foreach ($selectionCollection as $selection) {
             $bundleOptions[$selection->getOptionId()][] = $selection->getSelectionId();
         }
-
         return $bundleOptions;
     }
 
@@ -1392,11 +1361,9 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         if (!$ioPaymentMethod || !isset($magePaymentMethods[$ioPaymentMethod])) {
             $ioPaymentMethod = $defaultPaymentMethod;
         }
-
         $orderPayment = $this->paymentFactory->create();
         $orderPayment->setData("method", $ioPaymentMethod)
             ->setData("cc_last4", $paymentInfo["cc_last4"]);
-
         return $orderPayment;
     }
 
@@ -1427,7 +1394,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 }
             }
         }
-
         return $shipMethods;
     }
 
@@ -1449,7 +1415,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             }
             $paymentMethods[$paymentCode] = $paymentTitle;
         }
-
         return $paymentMethods;
     }
 
@@ -1524,7 +1489,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             $this->log($message);
             return false;
         }
-
         if ($ioOrderInfo["shipping_status"] != "shipped") {
             $message = "Order <" . $order->getIncrementId() . "> is not shipped on IO";
             $this->results["response"]["data"]["error"][] = $message;
@@ -1575,7 +1539,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $carrierCode = $trackInfo["carrier_code"];
                 $className = $trackInfo["title"];
                 $shippingDate = $_shipmentInfo["shipping_date"];
-
                 $trackingDetail = [
                     "carrier_code" => $carrierCode,
                     "title" => $className,
@@ -1586,7 +1549,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $convertOrder = $this->convertOrder;
                 $shipment = $convertOrder->toShipment($order);
                 $shipment->setCreatedAt($shippingDate);
-
                 foreach ($order->getAllItems() as $orderItem) {
                     if (!$orderItem->getQtyToShip() || $orderItem->getIsVirtual()) {
                         continue;
