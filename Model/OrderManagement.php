@@ -32,11 +32,10 @@ use Magento\Sales\Model\Order\PaymentFactory;
 use Magento\Quote\Api\Data\AddressInterfaceFactory;
 use Magento\Sales\Model\Order\AddressFactory;
 use Magento\Sales\Api\InvoiceManagementInterface;
-use Magento\Framework\DB\Transaction;
+use Magento\Framework\DB\TransactionFactory;
 use Magento\Sales\Model\Convert\Order as ConvertOrder;
 use Magento\Sales\Model\Order\Shipment\TrackFactory as ShipmentTrackFactory;
 use Magento\Sales\Model\Order\CreditmemoFactory;
-use Magento\Framework\Event\Manager as EventManager;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Shipping\Model\Config as ShippingConfig;
 use Magento\Payment\Model\Config as PaymentConfig;
@@ -131,9 +130,9 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      */
     public $invoiceManagementInterface;
     /**
-     * @var Transaction
+     * @var TransactionFactory
      */
-    public $transaction;
+    public $transactionFactory;
     /**
      * @var ConvertOrder
      */
@@ -146,10 +145,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      * @var CreditmemoFactory
      */
     public $creditMemoFactory;
-    /**
-     * @var EventManager
-     */
-    public $eventManager;
     /**
      * @var ProductRepositoryInterface
      */
@@ -188,11 +183,10 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      * @param AddressInterfaceFactory $addressInterfaceFactory
      * @param AddressFactory $orderAddressFactory
      * @param InvoiceManagementInterface $invoiceManagementInterface
-     * @param Transaction $transaction
+     * @param TransactionFactory $transactionFactory
      * @param ConvertOrder $convertOrder
      * @param ShipmentTrackFactory $shipmentTrackFactory
      * @param CreditmemoFactory $creditMemoFactory
-     * @param EventManager $eventManager
      * @param ProductRepositoryInterface $productRepository
      * @param ShippingConfig $shippingConfig
      * @param PaymentConfig $paymentConfig
@@ -216,11 +210,10 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         AddressInterfaceFactory $addressInterfaceFactory,
         AddressFactory $orderAddressFactory,
         InvoiceManagementInterface $invoiceManagementInterface,
-        Transaction $transaction,
+        TransactionFactory $transactionFactory,
         ConvertOrder $convertOrder,
         ShipmentTrackFactory $shipmentTrackFactory,
         CreditmemoFactory $creditMemoFactory,
-        EventManager $eventManager,
         ProductRepositoryInterface $productRepository,
         ShippingConfig $shippingConfig,
         PaymentConfig $paymentConfig,
@@ -243,11 +236,10 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $this->addressInterfaceFactory = $addressInterfaceFactory;
         $this->orderAddressFactory = $orderAddressFactory;
         $this->invoiceManagementInterface = $invoiceManagementInterface;
-        $this->transaction = $transaction;
+        $this->transactionFactory = $transactionFactory;
         $this->convertOrder = $convertOrder;
         $this->shipmentTrackFactory = $shipmentTrackFactory;
         $this->creditMemoFactory = $creditMemoFactory;
-        $this->eventManager = $eventManager;
         $this->productRepository = $productRepository;
         $this->shippingConfig = $shippingConfig;
         $this->paymentConfig = $paymentConfig;
@@ -682,15 +674,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                             $message = "Order " . $ioOrderId . " product '" . $product->getSku() . "': " . $item;
                             $this->results["response"]["data"]["error"][] = $message;
                             $this->log("ERROR " . $message);
-                            $this->eventManager->dispatch(
-                                'io_order_import_error',
-                                [
-                                    'order_client_id' => $ioOrderId,
-                                    'sku' => $product->getSku(),
-                                    'product_id' => $product->getId(),
-                                    'error' => $message
-                                ]
-                            );
                             return false;
                         }
                     } catch (\Exception $e) {
@@ -699,15 +682,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                         $this->results["response"]["data"]["error"][] = $message;
                         $this->log("ERROR " . $message);
                         $this->cleanResponseMessages();
-                        $this->eventManager->dispatch(
-                            'io_order_import_error',
-                            [
-                                'order_client_id' => $ioOrderId,
-                                'sku' => $product->getSku(),
-                                'product_id' => $product->getId(),
-                                'error' => $message
-                            ]
-                        );
                         throw new WebapiException(__($e->getMessage()), 0, 400);
                     }
                 }
@@ -808,23 +782,70 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $newOrder->setData("shipping_description", $ioShippingDescription);
             }
 
-            // update order items
-            /*if (!$isOldOrder && !$skuIsMissing) {
-                foreach ($ioOrderItems as $orderItem) {
-                    $webOrderItem = $this->getOrderItem($orderItem, $storeId);
+            // udate existing order items in the current order
+            if (!$isOldOrder && !$skuIsMissing) {
+                if (empty($orderInfo["order_item_type"])) {
                     $mageOrderItems = $newOrder->getItemsCollection();
-                    if (!$mageOrderItems) {
-                        continue;
+                    $mageItemMap = [];
+                    if ($mageOrderItems) {
+                        foreach ($mageOrderItems as $mageOrderItem) {
+                            $productId = $mageOrderItem->getProductId();
+                            if ($productId) {
+                                $mageItemMap[$productId] = $mageOrderItem;
+                            }
+                        }
                     }
-                    foreach ($mageOrderItems as $mageOrderItem) {
-                        $productId = $mageOrderItem->getProductId();
-                        if ($productId && $productId == $webOrderItem['product_id']) {
-                            $updateItem = $this->updateOrderItemCalculation($mageOrderItem, $webOrderItem);
-                            $updateItem->save();
+                    $ignoreFields = [
+                        'store_id',
+                        'is_virtual',
+                        'base_weee_tax_applied_amount',
+                        'base_weee_tax_applied_row_amnt',
+                        'weee_tax_applied_amount',
+                        'weee_tax_applied_row_amount',
+                        'weee_tax_applied',
+                        'weee_tax_disposition',
+                        'weee_tax_row_disposition',
+                        'base_weee_tax_disposition',
+                        'base_weee_tax_row_disposition'
+                    ];
+                    $hasChanges = false;
+                    $transaction = $this->transactionFactory->create();
+                    foreach ($ioOrderItems as $orderItem) {
+                        $webOrderItem = $this->getOrderItem($orderItem, $storeId);
+                        $productId = $webOrderItem->getProductId();
+                        if ($productId && isset($mageItemMap[$productId])) {
+                            $mageOrderItem = $mageItemMap[$productId];
+                            $dataToUpdate = [];
+                            foreach ($webOrderItem->getData() as $key => $value) {
+                                if (in_array($key, $ignoreFields, true)) {
+                                    continue;
+                                }
+                                $current = $mageOrderItem->getData($key);
+                                if (is_numeric($value)) {
+                                    $changed = abs((float) $current - (float) $value) > 0.0001;
+                                } else {
+                                    $changed = (string) $current !== (string) $value;
+                                }
+                                if ($changed) {
+                                    $dataToUpdate[$key] = $value;
+                                }
+                            }
+                            if (!empty($dataToUpdate)) {
+                                $mageOrderItem->addData($dataToUpdate);
+                                $transaction->addObject($mageOrderItem);
+                                $hasChanges = true;
+                            }
+                        }
+                    }
+                    if ($hasChanges) {
+                        try {
+                            $transaction->save();
+                        } catch (\Exception $e) {
+                            $this->log("ERROR Order {$ioOrderId}: update order items " . $e->getMessage());
                         }
                     }
                 }
-            }*/
+            }
 
             // order status info
             if ($orderInfo["checkout_status"] == "canceled") {
@@ -1268,7 +1289,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $orderItem->setData("is_virtual", 0);
         $orderItem->setData("base_weee_tax_applied_amount", 0);
         $orderItem->setData("base_weee_tax_applied_row_amnt", 0);
-        $orderItem->setData("base_weee_tax_applied_row_amount", 0);
         $orderItem->setData("weee_tax_applied_amount", 0);
         $orderItem->setData("weee_tax_applied_row_amount", 0);
         $orderItem->setData("weee_tax_applied", 0);
@@ -1276,14 +1296,13 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $orderItem->setData("weee_tax_row_disposition", 0);
         $orderItem->setData("base_weee_tax_disposition", 0);
         $orderItem->setData("base_weee_tax_row_disposition", 0);
+
+        $rowTax = (float) $item["tax_amount"];
+        $itemTax = $rowTax / (int) $item["qty"];
         if ($this->isTaxInclusive) {
-            $rowTax = (float) $item["tax_amount"];
-            $itemTax = $rowTax / (int) $item["qty"];
             $itemPrice = (float) $item["price"] - $itemTax;
             $priceInclTax = (float) $item["price"];
         } else {
-            $rowTax = (float) $item["tax_amount"];
-            $itemTax = $rowTax / (int) $item["qty"];
             $itemPrice = (float) $item["price"];
             $priceInclTax = (float) $item["price"] + $itemTax;
         }
@@ -1311,51 +1330,6 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             ->setData("base_row_total_incl_tax", $rowTotalInclTax);
 
         return $orderItem;
-    }
-
-    /**
-     * Update Order Item
-     *
-     * @param \Magento\Sales\Model\Order\Item $mageOrderItem
-     * @param \Magento\Sales\Model\Order\Item $orderItem
-     * @return \Magento\Sales\Model\Order\Item
-     */
-    public function updateOrderItemCalculation(
-        \Magento\Sales\Model\Order\Item $mageOrderItem,
-        \Magento\Sales\Model\Order\Item $orderItem
-    ): \Magento\Sales\Model\Order\Item {
-        $mageOrderItem->setData("product_type", "simple");
-        $mageOrderItem->setData("store_id", $orderItem->getData("store_id"));
-        $mageOrderItem->setData("is_virtual", 0);
-        $mageOrderItem->setData("base_weee_tax_applied_amount", 0);
-        $mageOrderItem->setData("base_weee_tax_applied_row_amnt", 0);
-        $mageOrderItem->setData("base_weee_tax_applied_row_amount", 0);
-        $mageOrderItem->setData("weee_tax_applied_amount", 0);
-        $mageOrderItem->setData("weee_tax_applied_row_amount", 0);
-        $mageOrderItem->setData("weee_tax_applied", 0);
-        $mageOrderItem->setData("weee_tax_disposition", 0);
-        $mageOrderItem->setData("weee_tax_row_disposition", 0);
-        $mageOrderItem->setData("base_weee_tax_disposition", 0);
-        $mageOrderItem->setData("base_weee_tax_row_disposition", 0);
-        $mageOrderItem->setData("tax_amount", $orderItem->getData("tax_amount"));
-        $mageOrderItem->setData("base_tax_amount", $orderItem->getData("base_tax_amount"));
-        $mageOrderItem->setData('tax_percent', $orderItem->getData('tax_percent'));
-        $mageOrderItem->setData("sku", $orderItem->getData("sku"))
-            ->setData("name", $orderItem->getData("name"))
-            ->setData("weight", $orderItem->getData("weight"))
-            ->setData("qty_ordered", $orderItem->getData("qty_ordered"))
-            ->setData("price", $orderItem->getData("price"))
-            ->setData("base_price", $orderItem->getData("base_price"))
-            ->setData("price_incl_tax", $orderItem->getData("price_incl_tax"))
-            ->setData("base_price_incl_tax", $orderItem->getData("base_price_incl_tax"))
-            ->setData("original_price", $orderItem->getData("original_price"))
-            ->setData("base_original_price", $orderItem->getData("base_original_price"))
-            ->setData("row_total", $orderItem->getData("row_total"))
-            ->setData("base_row_total", $orderItem->getData("base_row_total"))
-            ->setData("row_total_incl_tax", $orderItem->getData("row_total_incl_tax"))
-            ->setData("base_row_total_incl_tax", $orderItem->getData("base_row_total_incl_tax"));
-
-        return $mageOrderItem;
     }
 
     /**
@@ -1493,9 +1467,10 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $invoice->setRequestedCaptureCase(\Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
                 $invoice->register();
 
-                $transactionSave = $this->transaction->addObject($invoice)
+                $transaction = $this->transactionFactory->create()
+                    ->addObject($invoice)
                     ->addObject($invoice->getOrder());
-                $transactionSave->save();
+                $transaction->save();
 
                 $order->setData("base_total_invoiced", $order->getData("base_grand_total"));
                 $order->setData("total_invoiced", $order->getData("grand_total"));
