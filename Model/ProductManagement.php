@@ -66,6 +66,24 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public array $results = [];
     /**
+     * @var array
+     */
+    public $attributeSetCache = [];
+    /**
+     * Define Constants
+     */
+    public const VISIBILITY_CATALOG_SEARCH = 4;
+    public const VISIBILITY_NOT_VISIBLE = 1;
+    public const STATUS_ENABLED = 1;
+    public const TAX_CLASS_NONE = 0;
+    public const PRODUCT_TYPE_SIMPLE = 'simple';
+    public const PRODUCT_TYPE_CONFIGURABLE = 'configurable';
+    public const PRODUCT_TYPE_GROUPED = 'grouped';
+    /**
+     * @var array
+     */
+    public $newProductDefaults = [];
+    /**
      * @var ScopeConfigInterface
      */
     public $scopeConfig;
@@ -275,6 +293,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->categoryHelper->logModel = $this;
         $this->imageHelper = $imageHelper;
         $this->productImageFactory = $productImageFactory;
+        $this->initializeResults();
         $this->initializeLogger();
     }
 
@@ -304,6 +323,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @param string[] $stockInfo
      * @param string[] $imageInfo
      * @return array
+     * @throws \Magento\Framework\Webapi\Exception
      */
     public function import(
         int $store,
@@ -313,201 +333,191 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         array $stockInfo = [],
         array $imageInfo = []
     ): array {
-        // response messages
-        $this->results["response"]["data"]["success"] = [];
-        $this->results["response"]["data"]["error"] = [];
-        $this->results["response"]["quantity"]["success"] = [];
-        $this->results["response"]["quantity"]["error"] = [];
-        $this->results["response"]["category"]["success"] = [];
-        $this->results["response"]["category"]["error"] = [];
-        $this->results["response"]["image"]["success"] = [];
-        $this->results["response"]["image"]["error"] = [];
-        $this->results["response"]["variation"]["success"] = [];
-        $this->results["response"]["variation"]["error"] = [];
-
-        $errorMess = "data request error";
-
-        // store info
-        if (!$store) {
-            $message = "Field: 'store' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
         try {
-            $storeInfo = $this->storeManager->getStore($store);
-        } catch (\Exception $e) {
-            $message = "Requested 'store' " . $store . " doesn't exist > " . $e->getMessage();
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        // attribute info
-        if (!$attributeInfo) {
-            $message = "Field: 'attribute_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($attributeInfo["sku"])) {
-            $message = "Field: 'attribute_info' - 'sku' data is a required";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        // variation info
-        if (!$variationInfo) {
-            $message = "Field: 'variation_info' is a required field";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-        if (!isset($variationInfo["is_in_relationship"]) || !isset($variationInfo["is_parent"]) ||
-            !isset($variationInfo["parent_sku"]) || !isset($variationInfo["super_attribute"])) {
-            $message = "Field: 'attribute_info' - data error";
-            $this->results["response"]["data"]["error"][] = $message;
-            $this->log("ERROR: " . $message);
-            $this->cleanResponseMessages();
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-        }
-
-        $sku = $attributeInfo["sku"];
-        $productId = $this->productFactory->create()->getIdBySku($sku);
-        $defaultAttrSetId = $this->productResource->getEntityType()->getDefaultAttributeSetId();
-        $attributeSetId = "";
-        if (!empty($attributeInfo['attribute_set'])) {
-            $attrSetName = $attributeInfo['attribute_set'];
-            $entityTypeId = $this->entityFactory->create()
-                ->setType('catalog_product')
-                ->getTypeId();
-            $attributeSetId = $this->entityAttributeSetFactory->create()
-                ->getCollection()
-                ->setEntityTypeFilter($entityTypeId)
-                ->addFieldToFilter('attribute_set_name', $attrSetName)
-                ->getFirstItem()
-                ->getAttributeSetId();
-            if (!$attributeSetId) {
-                $message = "ERROR: sku '" . $sku . "' attribute_set: '" . $attrSetName . "' doesn't exist";
-                $this->results["response"]["data"]["error"][] = $message;
-                $this->log($message);
-                $this->cleanResponseMessages();
-                throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
-            }
-        }
-
-        $createParent = false;
-        if (!$productId) {
-            $this->isNewProduct = true;
-            $product = $this->productFactory->create();
-
-            $ioProductImages = $this->productImageFactory->create()
-                ->getCollection()
-                ->addFieldToFilter('sku', $sku);
-            foreach ($ioProductImages as $ioProductImage) {
-                $ioProductImage->delete();
-            }
-
-            $defaultDataToImport['default'] = [];
-
-            if ($store != 0) {
-                $websiteId = $storeInfo->getData('website_id');
-                $product->setWebsiteIds([$websiteId]);
-            }
-
-            $product->setData('sku', $sku);
-            $defaultDataToImport['default']['sku'] = $sku;
-
-            if ($attributeSetId) {
-                $product->setData('attribute_set_id', $attributeSetId);
-                $defaultDataToImport['default']['attribute_set'] = $attributeSetId;
-            } else {
-                $product->setData('attribute_set_id', $defaultAttrSetId);
-                $defaultDataToImport['default']['attribute_set'] = $defaultAttrSetId;
-            }
-
-            if ($variationInfo['is_parent']) {
-                $createParent = true;
-                $product->setData('type_id', 'configurable');
-                $defaultDataToImport['default']['type_id'] = 'configurable';
-            }
-
-            if (count($groupedInfo)) {
-                $createParent = true;
-                $product->setData('type_id', 'grouped');
-                $defaultDataToImport['default']['type_id'] = 'grouped';
-            }
-
-            $defaultVisibility = 4; // Catalog, Search
-            $product->setData('visibility', $defaultVisibility);
-            $defaultDataToImport['default']['visibility'] = $defaultVisibility;
-
-            if ($variationInfo['is_in_relationship'] && !$variationInfo['is_parent']) {
-                // set visibility for child product
-                $defaultChildVisibility = 1; // Not Visible Individually;
-                $product->setData('visibility', $defaultChildVisibility);
-                $defaultDataToImport['default']['visibility'] = $defaultChildVisibility;
-            }
-
-            if (!$createParent) {
-                $product->setData('type_id', 'simple');
-                $defaultDataToImport['default']['type_id'] = 'simple';
-            }
-
-            $defaultStatus = 1; // Enabled
-            $product->setData('status', $defaultStatus);
-            $defaultDataToImport['default']['status'] = $defaultStatus;
-
-            $defaultTaxClass = 0; // None
-            $product->setData('tax_class_id', $defaultTaxClass);
-            $defaultDataToImport['default']['tax_class'] = $defaultTaxClass;
-
-            $product->setStockData(
-                [
-                    "qty" => 0,
-                    "is_in_stock" => 1
-                ]
+            $this->validateProductInfo($store, $attributeInfo, $variationInfo);
+            $sku = $attributeInfo["sku"];
+            $product = $this->getProductToImport(
+                $store,
+                $sku,
+                $attributeInfo,
+                $variationInfo,
+                $groupedInfo
             );
-        } else {
-            $product = $this->productFactory->create()
-                ->setStoreId($store)
-                ->load($productId);
-            if (!$product->getId()) {
-                $message = "ERROR: sku '" . $sku . "' can't load product";
-                $this->results["response"]["data"]["error"][] = $message;
-                $this->log($message);
-                $this->cleanResponseMessages();
-                throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+            $productData = $this->getDataToImport(
+                $attributeInfo,
+                $product,
+                $variationInfo,
+                $groupedInfo,
+                $stockInfo,
+                $imageInfo,
+                $store
+            );
+            if ($this->isNewProduct) {
+                $productData = array_merge($productData, $this->newProductDefaults);
             }
-        }
-
-        $productData = $this->getDataToImport(
-            $attributeInfo,
-            $product,
-            $variationInfo,
-            $groupedInfo,
-            $stockInfo,
-            $imageInfo,
-            $store
-        );
-        if ($this->isNewProduct) {
-            $productData = array_merge($productData, $defaultDataToImport);
-        }
-
-        try {
             $this->importData($product, $productData, $store);
             $this->cleanResponseMessages();
             return $this->results;
         } catch (\Exception $e) {
-            $errorMess = "product import error";
-            throw new WebapiException(__($errorMess), 0, 400, $this->results["response"]);
+            throw $e;
         }
+    }
+
+    /**
+     * Validate Product Info
+     *
+     * @param int $store
+     * @param mixed $attributeInfo
+     * @param mixed $variationInfo
+     * @return void
+     * @throws \Magento\Framework\Webapi\Exception
+     */
+    public function validateProductInfo(int $store, mixed $attributeInfo, mixed $variationInfo): void
+    {
+        if (empty($store)) {
+            $this->addMessageAndLog("Field: 'store' is a required field", "error");
+        }
+        if (empty($attributeInfo) || !is_array($attributeInfo)) {
+            $this->addMessageAndLog("Field: 'attribute_info' is a required field", "error");
+        }
+        if (is_array($attributeInfo) && (!isset($attributeInfo["sku"]) || empty($attributeInfo["sku"]))) {
+            $this->addMessageAndLog("Field: 'attribute_info' - 'sku' data is a required", "error");
+        }
+        if (empty($variationInfo) || !is_array($variationInfo)) {
+            $this->addMessageAndLog("Field: 'variation_info' is a required field", "error");
+        } else {
+            $requiredKeys = ["is_in_relationship", "is_parent", "parent_sku", "super_attribute"];
+            $missingKeys = array_diff_key(array_flip($requiredKeys), $variationInfo);
+            if (!empty($missingKeys)) {
+                $missingKeyList = implode(', ', array_keys($missingKeys));
+                $this->addMessageAndLog("Field: 'variation_info' is missing required fields: {$missingKeyList}", "error");
+            }
+        }
+    }
+
+    /**
+     * Retrieves the Product Model
+     *
+     * @param int $store
+     * @param string $sku
+     * @param array $attributeInfo
+     * @param array $variationInfo
+     * @param array $groupedInfo
+     * @return \Magento\Catalog\Model\Product
+     * @throws \Magento\Framework\Webapi\Exception
+     */
+    public function getProductToImport(
+        int $store,
+        string $sku,
+        array $attributeInfo,
+        array $variationInfo,
+        array $groupedInfo
+    ): \Magento\Catalog\Model\Product {
+        $storeInfo = $this->getStoreInfo($store);
+        $productId = $this->productFactory->create()->getIdBySku($sku);
+        if ($productId) {
+            $this->isNewProduct = false;
+            $product = $this->productFactory->create()->setStoreId($store)->load($productId);
+            if (!$product->getId()) {
+                $this->addMessageAndLog("ERROR: sku '" . $sku . "' can't load product", "error");
+            }
+            return $product;
+        }
+
+        $this->isNewProduct = true;
+        $this->newProductDefaults = ['default' => []];
+        $product = $this->productFactory->create();
+
+        $ioProductImages = $this->productImageFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('sku', $sku);
+        foreach ($ioProductImages as $ioProductImage) {
+            $ioProductImage->delete();
+        }
+
+        $attributeSetId = $this->productResource->getEntityType()->getDefaultAttributeSetId();
+        if (!empty($attributeInfo['attribute_set'])) {
+            $attributeSetId = $this->_getAttributeSetId($attributeInfo['attribute_set'], $sku);
+        }
+        $product->setData('attribute_set_id', $attributeSetId);
+        $this->newProductDefaults['default']['attribute_set'] = $attributeSetId;
+
+        if ($store != 0) {
+            $websiteId = $storeInfo->getData('website_id');
+            $product->setWebsiteIds([$websiteId]);
+        }
+        $product->setData('sku', $sku);
+        $this->newProductDefaults['default']['sku'] = $sku;
+        $product->setData('status', self::STATUS_ENABLED);
+        $this->newProductDefaults['default']['status'] = self::STATUS_ENABLED;
+        $product->setData('tax_class_id', self::TAX_CLASS_NONE);
+        $this->newProductDefaults['default']['tax_class'] = self::TAX_CLASS_NONE;
+
+        $productType = self::PRODUCT_TYPE_SIMPLE;
+        if ($variationInfo['is_parent']) {
+            $productType = self::PRODUCT_TYPE_CONFIGURABLE;
+        } elseif (count($groupedInfo)) {
+            $productType = self::PRODUCT_TYPE_GROUPED;
+        }
+        $product->setData('type_id', $productType);
+        $this->newProductDefaults['default']['type_id'] = $productType;
+
+        $visibility = self::VISIBILITY_CATALOG_SEARCH;
+        if ($variationInfo['is_in_relationship'] && ($productType == self::PRODUCT_TYPE_SIMPLE)) {
+            $visibility = self::VISIBILITY_NOT_VISIBLE;
+        }
+        $product->setData('visibility', $visibility);
+        $this->newProductDefaults['default']['visibility'] = $visibility;
+
+        $product->setStockData(["qty" => 0, "is_in_stock" => 1]);
+
+        return $product;
+    }
+
+    /**
+     * Get Store Info
+     *
+     * @param int $store
+     * @return \Magento\Store\Model\Store
+     * @throws \Magento\Framework\Webapi\Exception
+     */
+    public function getStoreInfo(
+        int $store
+    ): \Magento\Store\Model\Store {
+        try {
+            return $this->storeManager->getStore($store);
+        } catch (\Exception $e) {
+            $this->addMessageAndLog("Requested 'store' {$store} doesn't exist", "error");
+        }
+    }
+
+    /**
+     * Retrieves the Attribute Set ID
+     *
+     * @param string $attrSetName
+     * @param string $sku
+     * @return int
+     * @throws \Magento\Framework\Webapi\Exception
+     */
+    public function _getAttributeSetId(string $attrSetName, string $sku): int
+    {
+        if (isset($this->attributeSetCache[$attrSetName])) {
+            return $this->attributeSetCache[$attrSetName];
+        }
+        $entityTypeId = $this->productResource->getEntityType()->getEntityTypeId();
+        $attributeSet = $this->entityAttributeSetFactory->create()
+            ->getCollection()
+            ->setEntityTypeFilter($entityTypeId)
+            ->addFieldToFilter('attribute_set_name', $attrSetName)
+            ->getFirstItem();
+
+        $attributeSetId = (int) $attributeSet->getAttributeSetId();
+        if (!$attributeSetId) {
+            $this->addMessageAndLog("ERROR: sku '" . $sku . "' attribute_set: '" . $attrSetName . "' doesn't exist", "error");
+        }
+        $this->attributeSetCache[$attrSetName] = $attributeSetId;
+
+        return $attributeSetId;
     }
 
     /**
@@ -526,25 +536,25 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $sku = $product->getSku();
         try {
             $importedAttributes = [];
-            if (count($productData['attributes'])) {
+            if (isset($productData['attributes']) && is_array($productData['attributes'])) {
                 foreach ($productData['attributes'] as $attrCode => $attrValue) {
-                    if ($attrCode == "url_key" && !$attrValue) {
-                        // prevent set url_key if it doesn't have value
+                    if (in_array($attrCode, $this->ignoreAttributes)) {
                         continue;
                     }
                     if (in_array($attrCode, ['_related_skus', '_upsell_skus', '_crosssell_skus'])) {
                         continue;
                     }
-                    if (in_array($attrCode, $this->ignoreAttributes)) {
+                    if ($attrCode == "url_key" && empty($attrValue)) {
                         continue;
                     }
-                    if ($attrCode == 'attribute_set') {
-                        $attrCode = 'attribute_set_id';
+                    switch ($attrCode) {
+                        case 'attribute_set':
+                            $attrCode = 'attribute_set_id';
+                            break;
+                        case 'tax_class':
+                            $attrCode = 'tax_class_id';
+                            break;
                     }
-                    if ($attrCode == 'tax_class') {
-                        $attrCode = 'tax_class_id';
-                    }
-
                     if (!in_array($attrCode, ['attribute_set_id', 'visibility', 'tax_class_id', 'status'])) {
                         // some case doesn't treat like select
                         $attribute = $this->getAttribute($attrCode);
@@ -554,10 +564,8 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                             continue;
                         }
                     }
-
                     if ($product->getData($attrCode) != $attrValue) {
                         $product->setData($attrCode, $attrValue);
-                        // use saveAttribute for existing product only
                         if (!$this->isNewProduct) {
                             $this->productResource->saveAttribute($product, $attrCode);
                         }
@@ -574,10 +582,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                 // $this->productRepositoryInterface->save($product);
                 $product->save();
                 try {
-                    $this->urlPersistInterface
-                        ->replace($this->productUrlRewriteGenerator->generate($product));
+                    $this->urlPersistInterface->replace(
+                        $this->productUrlRewriteGenerator->generate($product)
+                    );
                 } catch (\Exception $error) {
-                    $this->log('Error while generate url: ' . $error->getMessage());
+                    $this->log('Error while generating url: ' . $error->getMessage());
                 }
                 $message = "SAVED: sku '" . $sku . "' - product id <" . $product->getId() . "> saved successful";
                 $this->results["response"]["data"]["success"][] = $message;
@@ -585,10 +594,10 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             } else {
                 if (count($importedAttributes)) {
                     $message = "REQUEST: sku '" . $sku . "' - product id <" .
-                        $product->getId() . ">" . json_encode($importedAttributes);
+                        $product->getId() . "> : " . json_encode($importedAttributes);
                     $this->log($message);
-                    // change product update at after use saveAttribute
-                    $this->updateAtProductAfterSaveAttribute((int) $product->getId());
+                    // update the product updated_at
+                    $this->updateProductUpdatedAt((int) $product->getId());
                     $message = "SAVED: sku '" . $sku . "' - product id <" . $product->getId() . "> saved successful";
                     $this->results["response"]["data"]["success"][] = $message;
                     $this->log($message);
@@ -599,7 +608,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                 }
             }
         } catch (\Exception $e) {
-            $message = "ERROR: sku :: '" . $sku . "' - product id <" . $product->getId() . "> " . $e->getMessage();
+            $message = "ERROR: sku '" . $sku . "' - product id <" . $product->getId() . "> " . $e->getMessage();
             $this->results["response"]["data"]["error"][] = $message;
             $this->log($message);
             $this->cleanResponseMessages();
@@ -608,12 +617,9 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 
         // import stock
         try {
-            if ($product && $product->getId() &&
-                count($productData['stock']) && !empty($productData['stock']['qty'])) {
+            if ($product && $product->getId() && isset($productData['stock']['qty'])) {
                 $productId = $product->getId();
                 $stockData = $productData['stock'];
-                $_qty = (int) $stockData['qty'];
-                $minCartQty = isset($stockData['min_sale_qty']) ? (int) $stockData['min_sale_qty'] : null;
                 $stockUpdateData = [];
                 $stockItem = $this->stockRegistryInterface->getStockItem($productId);
                 if (!$stockItem->getId()) {
@@ -622,28 +628,29 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                         'is_in_stock' => 0
                     ];
                 }
-                $oldQty = $stockItem->getQty();
-                $oldQty = (int) $oldQty;
+                $oldQty = (int) $stockItem->getQty();
                 $isInStock = (bool) $stockItem->getData('is_in_stock');
                 $currentMinSaleQty = (int) $stockItem->getData('min_sale_qty');
-                if ($_qty > 0 && !$isInStock) {
+                $newQty = (int) $stockData['qty'];
+                $minCartQty = isset($stockData['min_sale_qty']) ? (int) $stockData['min_sale_qty'] : null;
+                if ($newQty > 0 && !$isInStock) {
                     $stockUpdateData['is_in_stock'] = 1;
                 }
-                if ($_qty <= 0 && $isInStock) {
+                if ($newQty <= 0 && $isInStock) {
                     $stockUpdateData['is_in_stock'] = 0;
                 }
-                if ($oldQty !== $_qty) {
-                    $stockUpdateData['qty'] = $_qty;
+                if ($oldQty !== $newQty) {
+                    $stockUpdateData['qty'] = $newQty;
                     $stockUpdateData['old_qty'] = $oldQty;
                 }
                 if ($minCartQty && $currentMinSaleQty !== $minCartQty) {
                     $stockUpdateData['min_sale_qty'] = $minCartQty;
                 }
-                if (count($stockUpdateData)) {
+                if (!empty($stockUpdateData)) {
                     $product->setStockData($stockUpdateData);
                     $product->save();
                     $message = "SAVED QTY: sku: '" . $sku . "' - product id <" .
-                        $productId . "> :" . json_encode($stockUpdateData);
+                        $productId . "> : " . json_encode($stockUpdateData);
                     $this->results["response"]["quantity"]["success"][] = $message;
                     $this->log($message);
                 } else {
@@ -661,160 +668,93 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             throw new WebapiException(__($e->getMessage()), 0, 400);
         }
 
+        // import related, up-sell, and cross-sell products
         if ($product && $product->getId()) {
+            $productLinks = $product->getProductLinks();
             $productId = $product->getId();
-            $productLinks = [];
-            $relatedFlag = false;
-            $upSellFlag = false;
-            $crossSellFlag = false;
-            // add related products
-            if (isset($productData['attributes']['_related_skus']) && $productData['attributes']['_related_skus']) {
-                $relatedSkus = explode(',', (string) $productData['attributes']['_related_skus']);
-                $relatedSkusToSet = array_map('trim', $relatedSkus);
-                $relatedSkusToSet = array_unique($relatedSkusToSet);
-                if (count($relatedSkusToSet)) {
-                    $relatedProducts = $product->getRelatedProducts();
-                    $relatedProArranged = [];
-                    foreach ($relatedProducts as $relatedPro) {
-                        $relatedProArranged[$relatedPro->getSku()] = ['position' => $relatedPro->getPosition()];
-                    }
-                    foreach ($relatedSkusToSet as $relatedSku) {
-                        $relatedSku = trim((string) $relatedSku);
-                        $relatedProID = $this->productFactory->create()->getIdBySku($relatedSku);
-                        if (!$relatedProID) {
-                            $message = 'WARN related sku ' . $relatedSku . ' not found';
-                            $this->results["response"]["data"]["error"][] = $message;
-                            $this->log($message);
-                            continue;
-                        }
-                        if (!array_key_exists($relatedSku, $relatedProArranged)) {
-                            $relatedProArranged[$relatedSku] = ['position' => ''];
-                            $relatedFlag = true;
+            $linkTypes = [
+                'related' => '_related_skus',
+                'upsell' => '_upsell_skus',
+                'crosssell' => '_crosssell_skus'
+            ];
+            $updatedSkus = [];
+            $existingLinksBySkuAndType = [];
+            foreach ($productLinks as $link) {
+                $existingLinksBySkuAndType[$link->getLinkType()][$link->getLinkedProductSku()] = true;
+            }
+
+            foreach ($linkTypes as $linkType => $attributeCode) {
+                if (isset($productData['attributes'][$attributeCode]) && $productData['attributes'][$attributeCode]) {
+                    $skusToSet = array_unique(
+                        array_map('trim', explode(',', (string) $productData['attributes'][$attributeCode]))
+                    );
+                    $newSkus = [];
+                    foreach ($skusToSet as $newSku) {
+                        if (!isset($existingLinksBySkuAndType[$linkType][$newSku])) {
+                            $newSkus[] = $newSku;
                         }
                     }
-                    if (count($relatedProArranged)) {
-                        foreach ($relatedProArranged as $relatedSku => $relatedPos) {
-                            $relatedProductLink = $this->productLink->create()
-                                ->setSku($sku)
-                                ->setLinkedProductSku($relatedSku)
-                                ->setLinkType("related")
-                                ->setPosition($relatedPos);
-                            $productLinks[] = $relatedProductLink;
+                    if (!empty($newSkus)) {
+                        $productCollection = $this->productFactory->create()
+                            ->getCollection()
+                            ->addAttributeToSelect('sku')
+                            ->addAttributeToFilter('sku', ['in' => $newSkus]);
+
+                        $productIds = [];
+                        foreach ($productCollection as $_product) {
+                            $productIds[$_product->getSku()] = $_product->getId();
+                        }
+
+                        $tempSkus = [];
+                        foreach ($newSkus as $newSku) {
+                            if (isset($productIds[$newSku])) {
+                                $productLink = $this->productLink->create()
+                                    ->setSku($sku)
+                                    ->setLinkedProductSku($newSku)
+                                    ->setLinkType($linkType)
+                                    ->setPosition('');
+                                $productLinks[] = $productLink;
+                                $tempSkus[] = $newSku;
+                            } else {
+                                $this->log("WARN: " . $linkType . " sku '" . $newSku . "' not found");
+                            }
+                        }
+                        if (!empty($tempSkus)) {
+                            $updatedSkus[$linkType] = $tempSkus;
                         }
                     }
                 }
             }
-            // add up-sell products
-            if (isset($productData['attributes']['_upsell_skus']) && $productData['attributes']['_upsell_skus']) {
-                $upSellSkus = explode(',', (string) $productData['attributes']['_upsell_skus']);
-                $upSellSkusToSet = array_map('trim', $upSellSkus);
-                $upSellSkusToSet = array_unique($upSellSkusToSet);
-                if (count($upSellSkusToSet)) {
-                    $upSellProducts = $product->getUpSellProducts();
-                    $upSellProArranged = [];
-                    foreach ($upSellProducts as $upSellPro) {
-                        $upSellProArranged[$upSellPro->getSku()] = ['position' => $upSellPro->getPosition()];
-                    }
-                    foreach ($upSellSkusToSet as $upSellSku) {
-                        $upSellSku = trim((string) $upSellSku);
-                        $upSellProID = $this->productFactory->create()->getIdBySku($upSellSku);
-                        if (!$upSellProID) {
-                            $message = 'WARN up-sell sku ' . $upSellSku . ' not found';
-                            $this->results["response"]["data"]["error"][] = $message;
-                            $this->log($message);
-                            continue;
-                        }
-                        if (!array_key_exists($upSellSku, $upSellProArranged)) {
-                            $upSellProArranged[$upSellSku] = ['position' => ''];
-                            $upSellFlag = true;
-                        }
-                    }
-                    if (count($upSellProArranged)) {
-                        foreach ($upSellProArranged as $upSellSku => $upSellPos) {
-                            $upSellProductLink = $this->productLink->create()
-                                ->setSku($sku)
-                                ->setLinkedProductSku($upSellSku)
-                                ->setLinkType("upsell")
-                                ->setPosition($upSellPos);
-                            $productLinks[] = $upSellProductLink;
-                        }
-                    }
-                }
-            }
-            // add cross-sell products
-            if (isset($productData['attributes']['_crosssell_skus']) && $productData['attributes']['_crosssell_skus']) {
-                $crossSellSkus = explode(',', (string) $productData['attributes']['_crosssell_skus']);
-                $crossSellSkusToSet = array_map('trim', $crossSellSkus);
-                $crossSellSkusToSet = array_unique($crossSellSkusToSet);
-                if (count($crossSellSkusToSet)) {
-                    $crossSellProducts = $product->getCrossSellProducts();
-                    $crossSellProArranged = [];
-                    foreach ($crossSellProducts as $crossSellPro) {
-                        $crossSellProArranged[$crossSellPro->getSku()] = ['position' => $crossSellPro->getPosition()];
-                    }
-                    foreach ($crossSellSkusToSet as $crossSellSku) {
-                        $crossSellSku = trim((string) $crossSellSku);
-                        $crossSellProID = $this->productFactory->create()->getIdBySku($crossSellSku);
-                        if (!$crossSellProID) {
-                            $message = 'WARN cross-sell sku ' . $crossSellSku . ' not found';
-                            $this->results["response"]["data"]["error"][] = $message;
-                            $this->log($message);
-                            continue;
-                        }
-                        if (!array_key_exists($crossSellSku, $crossSellProArranged)) {
-                            $crossSellProArranged[$crossSellSku] = ['position' => ''];
-                            $crossSellFlag = true;
-                        }
-                    }
-                    if (count($crossSellProArranged)) {
-                        foreach ($crossSellProArranged as $crossSellSku => $crossSellPos) {
-                            $crossSellProductLink = $this->productLink->create()
-                                ->setSku($sku)
-                                ->setLinkedProductSku($crossSellSku)
-                                ->setLinkType("crosssell")
-                                ->setPosition($crossSellPos);
-                            $productLinks[] = $crossSellProductLink;
-                        }
-                    }
-                }
-            }
-            if ($relatedFlag || $upSellFlag || $crossSellFlag) {
-                if (count($productLinks)) {
+            if (!empty($updatedSkus)) {
+                try {
                     $product->setProductLinks($productLinks);
-                    try {
-                        $product->save();
-                        if ($relatedFlag) {
-                            $this->log("Set related: sku '" . $sku . "' " . json_encode($relatedSkusToSet));
-                        }
-                        if ($upSellFlag) {
-                            $this->log("Set up-sells: sku '" . $sku . "' " . json_encode($upSellSkusToSet));
-                        }
-                        if ($crossSellFlag) {
-                            $this->log("Set cross-sells: sku '" . $sku . "' " . json_encode($crossSellSkusToSet));
-                        }
-                    } catch (\Exception $e) {
-                        $message = "ERROR: sku '" . $sku . "' - product id <" . $productId . "> " . $e->getMessage();
-                        $this->results["response"]["data"]["error"][] = $message;
+                    $product->save();
+                    foreach ($updatedSkus as $linkType => $skus) {
+                        $message = "SET " . $linkType . ": sku '" . $sku . "' - product id <" .
+                            $productId . "> : " . json_encode($skus);
                         $this->log($message);
-                        $this->cleanResponseMessages();
-                        throw new WebapiException(__($e->getMessage()), 0, 400);
                     }
+                } catch (\Exception $e) {
+                    $message = "ERROR: sku '" . $sku . "' - product id <" . $productId . "> " . $e->getMessage();
+                    $this->results["response"]["data"]["error"][] = $message;
+                    $this->log($message);
+                    $this->cleanResponseMessages();
+                    throw new \Magento\Framework\Webapi\Exception(__($e->getMessage()), 0, 400);
                 }
             }
         }
 
         // import categories
         try {
-            if ($product && $product->getId()) {
-                if (isset($productData['category_ids']) && is_array($productData['category_ids'])
-                    && count($productData['category_ids'])) {
-                    $categoryIds = $productData['category_ids'];
+            if ($product && $product->getId() && isset($productData['category_ids'])) {
+                $categoryIds = $productData['category_ids'];
+                if (is_array($categoryIds) && !empty($categoryIds)) {
                     $this->setCategories($product, $categoryIds);
                 }
             }
         } catch (\Exception $e) {
-            $productId = $product->getId();
-            $message = "ERROR category: sku '" . $sku . "' - product id <" . $productId . "> " . $e->getMessage();
+            $message = "ERROR category: sku '" . $sku . "' - product id <" .
+                $product->getId() . "> " . $e->getMessage();
             $this->results["response"]["category"]["error"][] = $message;
             $this->log($message);
             $this->cleanResponseMessages();
@@ -823,7 +763,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 
         // import images
         try {
-            if ($product && $product->getId() && count($productData['images'])) {
+            if ($product && $product->getId() && !empty($productData['images'])) {
                 $product = $this->productFactory->create()
                     ->setStoreId(0)
                     ->load($product->getId());
@@ -831,13 +771,15 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             }
         } catch (\Exception $e) {
             $productId = $product->getId();
-            $message = "ERROR: sku '" . $sku . "' - product id <" . $productId . "> set image: " . $e->getMessage();
+            $message = "ERROR: sku '" . $sku . "' - product id <" .
+                $productId . "> set image: " . $e->getMessage();
             $this->results["response"]["image"]["error"][] = $message;
             $this->log($message);
             $this->cleanResponseMessages();
             throw new WebapiException(__($e->getMessage()), 0, 400);
         }
 
+        // import variations
         try {
             if (!$product || !$product->getId()) {
                 $message = "ERROR: sku '" . $sku . "' can't load product";
@@ -1072,7 +1014,6 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             $this->cleanResponseMessages();
             throw new WebapiException(__($e->getMessage()), 0, 400);
         }
-
         return true;
     }
 
@@ -1087,18 +1028,21 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         \Magento\Catalog\Model\Product $product,
         array $categoryIds
     ): void {
-        $sku = $product->getSku();
-        $productId = $product->getId();
         $categoryIds = array_unique($categoryIds);
+        $categoryIds = array_map('intval', $categoryIds);
         sort($categoryIds);
+
         $oldCategoryIds = $product->getCategoryIds();
+        $oldCategoryIds = array_map('intval', $oldCategoryIds);
         sort($oldCategoryIds);
-        if ($oldCategoryIds != $categoryIds) {
+
+        if ($oldCategoryIds !== $categoryIds) {
+            // $this->categoryLinkManagementInterface->assignProductToCategories($sku, $categoryIds);
             $product->setCategoryIds($categoryIds);
             $product->save();
-            // $this->categoryLinkManagementInterface->assignProductToCategories($sku, $categoryIds);
-            $message = "SET category sku '" . $sku . "' - product id <" .
-                $productId . ">" . " [" . implode(",", $categoryIds) . "] old [" . implode(",", $oldCategoryIds) . "]";
+            $message = "SET category sku '" . $product->getSku() . "' - product id <" .
+                $product->getId() . "> : [" . implode(",", $categoryIds) . "] old [" .
+                implode(",", $oldCategoryIds) . "]";
             $this->results["response"]["category"]["success"][] = $message;
             $this->log($message);
         }
@@ -1125,14 +1069,14 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         array $imageInfo,
         int $storeId
     ): array {
-        $result = [];
-        $result['attributes'] = []; // for product fields
-        $result['category_ids'] = []; // for category ids
-        $result['variation'] = $variationInfo; // for product variation
-        $result['grouped'] = $groupedInfo; // for grouped product
-        $result['stock'] = $stockInfo; // for stock item fields
-        $result['images'] = $imageInfo; // for product images
-
+        $result = [
+            'attributes' => [],
+            'category_ids' => [],
+            'variation' => $variationInfo,
+            'grouped' => $groupedInfo,
+            'stock' => $stockInfo,
+            'images' => $imageInfo,
+        ];
         $categoryIdsToSet = [];
         $attrsInSet = $this->productAttributeManagement->getAttributes(
             $product->getData("attribute_set_id")
@@ -1152,6 +1096,9 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             }
             // skip attribute is in stock attributes
             if (in_array($attrCode, ['qty', 'is_in_stock', 'min_sale_qty'])) {
+                continue;
+            }
+            if ($attrValue === null || $attrValue == "") {
                 continue;
             }
             if ($attrCode == 'status') {
@@ -1191,25 +1138,30 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     $attrValue = null;
                 }
             }
-            if ($attrCode == 'category_name') {
+            if ($attrCode == "category_ids") {
                 if ($attrValue) {
-                    $allowCreateCat = false;
-                    $foundCatIds = $this->categoryHelper->processCategoryTree(
-                        $attrValue,
-                        $storeId,
-                        $allowCreateCat
-                    );
-                    if (!count($foundCatIds)) {
-                        $message = "WARN: category '" . $attrValue . "' not found";
-                        $this->results["response"]["category"]["error"][] = $message;
-                        $this->log($message);
-                    }
-                    $categoryIdsToSet[] = $foundCatIds;
+                    $attrValue = array_map('trim', explode(',', (string) $attrValue));
+                    $categoryIdsToSet = array_merge($categoryIdsToSet, $attrValue);
                 }
                 // deal with categories later
                 continue;
             }
-            if ($attrValue === null || $attrValue == "") {
+            if ($attrCode == 'category_name') {
+                if ($attrValue) {
+                    $foundCatIds = $this->categoryHelper->processCategoryTree(
+                        $attrValue,
+                        $storeId,
+                        $allowCreateCat = false
+                    );
+                    if (empty($foundCatIds)) {
+                        $message = "WARN: category '" . $attrValue . "' not found";
+                        $this->results["response"]["category"]["error"][] = $message;
+                        $this->log($message);
+                    } else {
+                        $categoryIdsToSet = array_merge($categoryIdsToSet, $foundCatIds);
+                    }
+                }
+                // deal with categories later
                 continue;
             }
             if ($attrCode == 'weight') {
@@ -1239,8 +1191,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                 }
             }
             if ($attrCode == "special_from_date") {
-                $specialPris = $product->getData("special_price");
-                if ($specialPris && $attrValue == null) {
+                if ($product->getData("special_price") && empty($attrValue)) {
                     continue;
                 }
             }
@@ -1251,12 +1202,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     $result['attributes']['price'] = 0;
                 }
             }
-
             $result['attributes'][$attrCode] = $attrValue;
         }
         // end loop for attributeInfo
 
-        $result['category_ids'] = array_merge([], ...$categoryIdsToSet);
+        $result['category_ids'] = array_unique(array_map('intval', $categoryIdsToSet));
 
         return $result;
     }
@@ -1275,11 +1225,10 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         if (!$product || !$product->getId()) {
             return 0;
         }
-        if (count($imageList)) {
+        if (!empty($imageList)) {
             $addedImagesCount = $this->imageHelper->populateProductImage($product, $imageList, $this);
             return $addedImagesCount;
         }
-
         return 0;
     }
 
@@ -1310,43 +1259,68 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             $this->log($message);
             return null;
         }
-
         return $attrValue;
     }
 
     /**
-     * Update product after save attribute
+     * Update product updated_at after saving an attribute.
      *
      * @param int $productId
      * @return bool
      */
-    public function updateAtProductAfterSaveAttribute(int $productId): bool
+    public function updateProductUpdatedAt(int $productId): bool
     {
-        $attributeCode = 'updated_at';
-        $attribute = $this->entityAttributeFactory->create()
-            ->loadByCode('catalog_product', $attributeCode);
-        if ($attribute->getData('backend_type') != "static") {
-            $backendType = $attribute->getData('backend_type');
-        } else {
-            $backendType = "";
-        }
-
-        $resource = $this->resourceConnection;
-        $connection = $resource->getConnection('core_write');
-        $tableName = $resource->getTableName(['catalog_product_entity', $backendType]);
-        $columnName = 'entity_id';
-
-        if ($resource->getConnection()->tableColumnExists($tableName, $columnName) !== true) {
+        try {
+            $connection = $this->resourceConnection->getConnection('core_write');
+            $tableName = $this->resourceConnection->getTableName('catalog_product_entity');
+            $now = gmdate('Y-m-d H:i:s');
+            $bind = [
+                'updated_at' => $now
+            ];
+            $where = ['entity_id = ?' => $productId];
+            $connection->update($tableName, $bind, $where);
+            return true;
+        } catch (\Exception $e) {
+            $this->log("ERROR: update product updated_at for product id <" . $productId . "> " . $e->getMessage());
             return false;
         }
+    }
 
-        $now = gmdate('Y-m-d H:i:s');
+    /**
+     * Initialize results structure
+     *
+     * @return void
+     */
+    public function initializeResults(): void
+    {
+        $sections = ['data', 'quantity', 'category', 'image', 'variation'];
+        $this->results['response'] = [];
+        foreach ($sections as $section) {
+            $this->results['response'][$section] = [
+                'success' => [],
+                'error' => [],
+            ];
+        }
+    }
 
-        // update data into table
-        $sql = "Update " . $tableName . " SET updated_at ='" . $now . "' WHERE entity_id=" . $productId;
-        $connection->query($sql);
-
-        return true;
+    /**
+     * Add message and log
+     *
+     * @param string $message
+     * @param string $type
+     * @param int $logLevel
+     * @return void
+     */
+    public function addMessageAndLog(string $message, string $type, int $logLevel = 1): void
+    {
+        $this->results["response"]["data"][$type][] = $message;
+        $this->cleanResponseMessages();
+        if ($logLevel) {
+            $this->log($message);
+        }
+        if ($type === "error") {
+            throw new WebapiException(__($message), 0, 400, $this->results["response"]);
+        }
     }
 
     /**
