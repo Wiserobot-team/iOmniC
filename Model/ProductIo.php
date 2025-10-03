@@ -16,6 +16,7 @@ declare(strict_types=1);
 namespace WiseRobot\Io\Model;
 
 use Magento\Catalog\Model\ProductFactory;
+use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
@@ -24,6 +25,7 @@ use Magento\Eav\Model\Entity\Attribute\SetFactory as EntityAttributeSetFactory;
 use Magento\Catalog\Model\CategoryFactory;
 use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as ConfigurableProduct;
 use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
+use Magento\Bundle\Model\Product\Type as BundleProduct;
 use Magento\Eav\Api\AttributeRepositoryInterface;
 use Magento\Catalog\Api\TierPriceStorageInterface;
 use Magento\Framework\App\ResourceConnection;
@@ -49,6 +51,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @var ProductFactory
      */
     public $productFactory;
+    /**
+     * @var ProductRepositoryInterface
+     */
+    public $productRepository;
     /**
      * @var ProductCollectionFactory
      */
@@ -82,6 +88,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public $groupedProduct;
     /**
+     * @var BundleProduct
+     */
+    public $bundleProduct;
+    /**
      * @var AttributeRepositoryInterface
      */
     public $attributeRepositoryInterface;
@@ -104,6 +114,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 
     /**
      * @param ProductFactory $productFactory
+     * @param ProductRepositoryInterface $productRepository
      * @param ProductCollectionFactory $productCollectionFactory
      * @param StoreManagerInterface $storeManager
      * @param TimezoneInterface $timezoneInterface
@@ -112,6 +123,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param CategoryFactory $categoryFactory
      * @param ConfigurableProduct $configurableProduct
      * @param GroupedProduct $groupedProduct
+     * @param BundleProduct $bundleProduct
      * @param AttributeRepositoryInterface $attributeRepositoryInterface
      * @param TierPriceStorageInterface $tierPriceStorageInterface
      * @param ResourceConnection $resourceConnection
@@ -120,6 +132,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public function __construct(
         ProductFactory $productFactory,
+        ProductRepositoryInterface $productRepository,
         ProductCollectionFactory $productCollectionFactory,
         StoreManagerInterface $storeManager,
         TimezoneInterface $timezoneInterface,
@@ -128,6 +141,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         CategoryFactory $categoryFactory,
         ConfigurableProduct $configurableProduct,
         GroupedProduct $groupedProduct,
+        BundleProduct $bundleProduct,
         AttributeRepositoryInterface $attributeRepositoryInterface,
         TierPriceStorageInterface $tierPriceStorageInterface,
         ResourceConnection $resourceConnection,
@@ -135,6 +149,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         ObjectManagerInterface $objectManager
     ) {
         $this->productFactory = $productFactory;
+        $this->productRepository = $productRepository;
         $this->productCollectionFactory = $productCollectionFactory;
         $this->storeManager = $storeManager;
         $this->timezoneInterface = $timezoneInterface;
@@ -143,6 +158,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $this->categoryFactory = $categoryFactory;
         $this->configurableProduct = $configurableProduct;
         $this->groupedProduct = $groupedProduct;
+        $this->bundleProduct = $bundleProduct;
         $this->attributeRepositoryInterface = $attributeRepositoryInterface;
         $this->tierPriceStorageInterface = $tierPriceStorageInterface;
         $this->resourceConnection = $resourceConnection;
@@ -489,6 +505,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         if ($typeId !== "configurable") {
             $productData['grouped_info'] = $this->populateGroupedProductInfo($product, $storeId);
         }
+        if ($typeId === "bundle") {
+            $this->populateBundleProductInfo($productData, $product);
+        }
         $this->populateProductLinks($productData, $product);
         $this->populateTierPricesInfo($productData, $productSku);
         $this->populateStockInfo($productData, $product);
@@ -651,7 +670,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $attrData = $product->getData($attrCode);
         switch ($attrCode) {
             case 'price':
-                return $product->getPrice();
+                return $this->getPrice($product, $storeId);
             case 'special_price':
                 return $this->getSpecialPrice($product);
             case 'tax_class_id':
@@ -670,24 +689,94 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
+     * Get Price
+     *
+     * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
+     * @return float
+     */
+    public function getPrice(
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): float {
+        $normalPrice = (float) $product->getPrice();
+        if ($product->getTypeId() === "bundle") {
+            $priceType = (int) $product->getPriceType();
+            if ($priceType === \Magento\Bundle\Model\Product\Price::PRICE_TYPE_FIXED) {
+                return $normalPrice;
+            }
+            if ($priceType === \Magento\Bundle\Model\Product\Price::PRICE_TYPE_DYNAMIC) {
+                $bundlePrice = 0.0;
+                $optionsCollection = $this->bundleProduct->getOptionsCollection($product);
+                if (!$optionsCollection->count()) {
+                    return $bundlePrice;
+                }
+                $optionIds = $this->bundleProduct->getOptionsIds($product);
+                $selectionsCollection = $this->bundleProduct->getSelectionsCollection(
+                    $optionIds,
+                    $product
+                );
+                if (!$selectionsCollection->count()) {
+                    return $bundlePrice;
+                }
+                foreach ($optionsCollection as $option) {
+                    if (!$option->getRequired()) {
+                        continue;
+                    }
+                    $defaultSelections = $selectionsCollection->getItemsByColumnValue('option_id', $option->getId());
+                    $minSelectionPrice = null;
+                    foreach ($defaultSelections as $selection) {
+                        try {
+                            $itemProduct = $this->productRepository->getById(
+                                (int) $selection->getProductId(),
+                                false,
+                                $storeId
+                            );
+                            $itemPrice = (float) $itemProduct->getPrice();
+                            $itemQty = (float) $selection->getSelectionQty();
+                            $currentSelectionPrice = $itemPrice * $itemQty;
+                            if ($minSelectionPrice === null || $currentSelectionPrice < $minSelectionPrice) {
+                                $minSelectionPrice = $currentSelectionPrice;
+                            }
+                        } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
+                            continue;
+                        }
+                    }
+                    if ($minSelectionPrice !== null) {
+                        $bundlePrice += $minSelectionPrice;
+                    }
+                }
+                return $bundlePrice;
+            }
+        }
+        return $normalPrice;
+    }
+
+    /**
      * Get Special Price
      *
      * @param \Magento\Catalog\Model\Product $product
-     * @return mixed
+     * @return float
      */
-    public function getSpecialPrice(\Magento\Catalog\Model\Product $product): mixed
+    public function getSpecialPrice(\Magento\Catalog\Model\Product $product): float
     {
-        if ($product->getData('special_price')) {
-            $now = strtotime((string) $this->timezoneInterface->date()->format('Y-m-d H:i:s'));
-            $specialToDate = strtotime((string) $product->getData('special_to_date'));
-            if ($specialToDate && $now > $specialToDate) {
-                return $product->getPrice();
-            }
-            return $product->getTypeId() == 'bundle'
-                ? $product->getPrice() * $product->getSpecialPrice() / 100
-                : $product->getSpecialPrice();
+        $price = (float) $product->getPrice();
+        $specialPrice = $product->getData('special_price');
+        if (!$specialPrice) {
+            return $price;
         }
-        return $product->getPrice();
+        $now = $this->timezoneInterface->date();
+        $fromDate = $product->getSpecialFromDate();
+        $toDate = $product->getSpecialToDate();
+        if ($fromDate && $now < $this->timezoneInterface->date(new \DateTime($fromDate))) {
+            return $price;
+        }
+        if ($toDate && $now > $this->timezoneInterface->date(new \DateTime($toDate))) {
+            return $price;
+        }
+        return $product->getTypeId() === 'bundle'
+            ? $price * ((float) $specialPrice / 100)
+            : (float) $specialPrice;
     }
 
     /**
@@ -969,6 +1058,67 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             }
         }
         return $groupedInfo;
+    }
+
+    /**
+     * Populate Bundle Product Info
+     *
+     * @param array $productData
+     * @param \Magento\Catalog\Model\Product $product
+     * @return void
+     */
+    public function populateBundleProductInfo(
+        array &$productData,
+        \Magento\Catalog\Model\Product $product
+    ): void {
+        $bundleOptions = [];
+        $optionsCollection = $this->bundleProduct->getOptionsCollection($product);
+        $optionIds = $this->bundleProduct->getOptionsIds($product);
+        $selectionsCollection = $this->bundleProduct->getSelectionsCollection(
+            $optionIds,
+            $product
+        );
+        foreach ($optionsCollection as $option) {
+            $optionData = [
+                'option_id' => (int) $option->getId(),
+                'parent_id' => (int) $option->getParentId(),
+                'required' => (bool) $option->getRequired(),
+                'position' => (int) $option->getPosition(),
+                'type' => $option->getType(),
+                'default_title' => $option->getDefaultTitle(),
+                'title' => $option->getTitle(),
+                'selections' => []
+            ];
+            foreach ($selectionsCollection as $selection) {
+                if ((int) $selection->getOptionId() === (int) $option->getId()) {
+                    $selectionData = [
+                        'selection_id' => (int) $selection->getId(),
+                        'option_id' => (int) $selection->getOptionId(),
+                        'parent_product_id' => (int) $selection->getParentProductId(),
+                        'product_id' => (int) $selection->getProductId(),
+                        'sku' => $selection->getSku(),
+                        'name' => $selection->getName(),
+                        'position' => (int) $selection->getPosition(),
+                        'is_default' => (bool) $selection->getIsDefault(),
+                        'selection_price_type' => (int) $selection->getSelectionPriceType(),
+                        'selection_price_value' => (float) $selection->getSelectionPriceValue(),
+                        'selection_qty' => (float) $selection->getSelectionQty(),
+                        'selection_can_change_qty' => (bool) $selection->getSelectionCanChangeQty()
+                    ];
+                    $optionData['selections'][] = $selectionData;
+                }
+            }
+            $bundleOptions[] = $optionData;
+        }
+        if (!empty($bundleOptions)) {
+            $productData['bundle_info'] = [
+                'sku_type' => (int) $product->getSkuType(),
+                'price_type' => (int) $product->getPriceType(),
+                'weight_type' => (int) $product->getWeightType(),
+                'shipment_type' => (int) $product->getShipmentType(),
+                'bundle_options' => $bundleOptions
+            ];
+        }
     }
 
     /**
