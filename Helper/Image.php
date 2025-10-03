@@ -144,13 +144,13 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         if ($totalImagesAdded) {
             try {
                 $product->save();
-                $message = "Sku '" . $sku . "' - product id <" . $productId . "> saved successful";
+                $message = "SAVED: sku '" . $sku . "' - product id <" . $productId . "> saved successfully";
                 $productManagement->results["response"]["image"]["success"][] = $message;
-                $productManagement->log("SAVED: " . $message);
+                $productManagement->log($message);
             } catch (\Exception $e) {
-                $message = "Sku '" . $sku . "' - product id <" . $productId . "> set image: " .  $e->getMessage();
+                $message = "ERROR: sku '" . $sku . "' - product id <" . $productId . "> set image: " .  $e->getMessage();
                 $productManagement->results["response"]["image"]["error"][] = $message;
-                $productManagement->log("ERROR: " . $message);
+                $productManagement->log($message);
             }
         }
 
@@ -280,9 +280,9 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                     ->load($product->getId());
             }
         } catch (\Exception $e) {
-            $message = "Sku '" . $sku . "' - product id <" . $productId . "> remove image: " .  $e->getMessage();
+            $message = "ERROR: sku '" . $sku . "' - product id <" . $productId . "> remove image: " .  $e->getMessage();
             $productManagement->results["response"]["image"]["error"][] = $message;
-            $productManagement->log("ERROR: " . $message);
+            $productManagement->log($message);
             $this->deleteStoredProductImages($product->getSku());
         }
     }
