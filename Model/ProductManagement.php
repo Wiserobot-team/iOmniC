@@ -54,11 +54,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     /**
      * @var string
      */
-    public $logFile = "wr_io_product_import.log";
+    public string $logFile = "wr_io_product_import.log";
     /**
      * @var bool
      */
-    public $isNewProduct = false;
+    public bool $isNewProduct = false;
     /**
      * @var array
      */

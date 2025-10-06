@@ -15,13 +15,14 @@ declare(strict_types=1);
 
 namespace WiseRobot\Io\Model;
 
+use Magento\Framework\Filesystem;
+use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Catalog\Model\ProductFactory;
-use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
-use Magento\Tax\Model\ClassModelFactory;
-use Magento\Eav\Model\Entity\Attribute\SetFactory as EntityAttributeSetFactory;
+use Magento\Eav\Model\ResourceModel\Entity\Attribute\Set\CollectionFactory as AttributeSetCollectionFactory;
+use Magento\Tax\Model\ResourceModel\TaxClass\CollectionFactory as TaxClassCollectionFactory;
 use Magento\Catalog\Model\CategoryFactory;
 use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as ConfigurableProduct;
 use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
@@ -36,25 +37,41 @@ use Magento\Framework\ObjectManagerInterface;
 class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
 {
     /**
+     * @var Zend_Log
+     */
+    public $logger;
+    /**
+     * @var string
+     */
+    public string $logFile = "wr_io_product_export.log";
+    /**
      * @var array
      */
     public array $results = [];
     /**
      * @var bool
      */
-    public $selectAll = false;
+    public bool $selectAll = false;
     /**
      * @var array
      */
     public array $selectAttrs = [];
     /**
+     * @var array
+     */
+    public array $attributeSetNameCache = [];
+    /**
+     * @var array
+     */
+    public array $taxClassNameCache = [];
+    /**
+     * @var Filesystem
+     */
+    public $filesystem;
+    /**
      * @var ProductFactory
      */
     public $productFactory;
-    /**
-     * @var ProductRepositoryInterface
-     */
-    public $productRepository;
     /**
      * @var ProductCollectionFactory
      */
@@ -68,13 +85,13 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public $timezoneInterface;
     /**
-     * @var ClassModelFactory
+     * @var AttributeSetCollectionFactory
      */
-    public $classModelFactory;
+    public $attributeSetCollectionFactory;
     /**
-     * @var EntityAttributeSetFactory
+     * @var TaxClassCollectionFactory
      */
-    public $entityAttributeSetFactory;
+    public $taxClassCollectionFactory;
     /**
      * @var CategoryFactory
      */
@@ -113,13 +130,13 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     public $objectManager;
 
     /**
+     * @param Filesystem $filesystem
      * @param ProductFactory $productFactory
-     * @param ProductRepositoryInterface $productRepository
      * @param ProductCollectionFactory $productCollectionFactory
      * @param StoreManagerInterface $storeManager
      * @param TimezoneInterface $timezoneInterface
-     * @param ClassModelFactory $classModelFactory
-     * @param EntityAttributeSetFactory $entityAttributeSetFactory
+     * @param AttributeSetCollectionFactory $attributeSetCollectionFactory
+     * @param TaxClassCollectionFactory $taxClassCollectionFactory
      * @param CategoryFactory $categoryFactory
      * @param ConfigurableProduct $configurableProduct
      * @param GroupedProduct $groupedProduct
@@ -131,13 +148,13 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param ObjectManagerInterface $objectManager
      */
     public function __construct(
+        Filesystem $filesystem,
         ProductFactory $productFactory,
-        ProductRepositoryInterface $productRepository,
         ProductCollectionFactory $productCollectionFactory,
         StoreManagerInterface $storeManager,
         TimezoneInterface $timezoneInterface,
-        ClassModelFactory $classModelFactory,
-        EntityAttributeSetFactory $entityAttributeSetFactory,
+        AttributeSetCollectionFactory $attributeSetCollectionFactory,
+        TaxClassCollectionFactory $taxClassCollectionFactory,
         CategoryFactory $categoryFactory,
         ConfigurableProduct $configurableProduct,
         GroupedProduct $groupedProduct,
@@ -148,13 +165,13 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         ModuleManager $moduleManager,
         ObjectManagerInterface $objectManager
     ) {
+        $this->filesystem = $filesystem;
         $this->productFactory = $productFactory;
-        $this->productRepository = $productRepository;
         $this->productCollectionFactory = $productCollectionFactory;
         $this->storeManager = $storeManager;
         $this->timezoneInterface = $timezoneInterface;
-        $this->classModelFactory = $classModelFactory;
-        $this->entityAttributeSetFactory = $entityAttributeSetFactory;
+        $this->attributeSetCollectionFactory = $attributeSetCollectionFactory;
+        $this->taxClassCollectionFactory = $taxClassCollectionFactory;
         $this->categoryFactory = $categoryFactory;
         $this->configurableProduct = $configurableProduct;
         $this->groupedProduct = $groupedProduct;
@@ -164,6 +181,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $this->resourceConnection = $resourceConnection;
         $this->moduleManager = $moduleManager;
         $this->objectManager = $objectManager;
+        $this->initializeLogger();
     }
 
     /**
@@ -213,8 +231,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         'sku',
         'name',
         'attribute_set_id',
-        'visibility',
         'tax_class_id',
+        'visibility',
         'type_id',
         'created_at',
         'updated_at',
@@ -253,6 +271,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $this->applyFilter($productCollection, $filter);
         $this->applySortingAndPaging($productCollection, $page, $limit);
         $this->addMediaGallery($productCollection);
+        $this->preloadAttributeSets();
+        $this->preloadTaxClasses();
         $result = [];
         $storeId = (int) $storeInfo->getId();
         $storeName = $storeInfo->getName();
@@ -467,6 +487,40 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
+     * Preloads all Attribute Set names into the cache
+     *
+     * @return void
+     */
+    public function preloadAttributeSets(): void
+    {
+        if (!empty($this->attributeSetNameCache)) {
+            return;
+        }
+        $collection = $this->attributeSetCollectionFactory->create()
+            ->addFieldToSelect(['attribute_set_id', 'attribute_set_name']);
+        foreach ($collection as $item) {
+            $this->attributeSetNameCache[(int) $item->getAttributeSetId()] = $item->getAttributeSetName();
+        }
+    }
+
+    /**
+     * Preloads all Tax Class names into the cache
+     *
+     * @return void
+     */
+    public function preloadTaxClasses(): void
+    {
+        if (!empty($this->taxClassNameCache)) {
+            return;
+        }
+        $collection = $this->taxClassCollectionFactory->create()
+            ->addFieldToSelect(['class_id', 'class_name']);
+        foreach ($collection as $item) {
+            $this->taxClassNameCache[(int) $item->getClassId()] = $item->getClassName();
+        }
+    }
+
+    /**
      * Get Product Data
      *
      * @param \Magento\Catalog\Model\Product $product
@@ -486,8 +540,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 'sku' => $productSku,
                 'name' => $product->getData("name"),
                 'attribute_set' => $this->getAttrValue($product, 'attribute_set_id', $storeId),
-                'visibility' => $this->getAttrValue($product, 'visibility', $storeId),
                 'tax_class' => $this->getAttrValue($product, 'tax_class_id', $storeId),
+                'visibility' => $this->getAttrValue($product, 'visibility', $storeId),
                 'type_id' => $typeId,
                 'created_at' => $product->getData("created_at"),
                 'updated_at' => $product->getData("updated_at"),
@@ -673,14 +727,12 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 return $this->getPrice($product, $storeId);
             case 'special_price':
                 return $this->getSpecialPrice($product);
-            case 'tax_class_id':
-                $taxClassModel = $this->classModelFactory->create()->load($attrData);
-                return $taxClassModel->getClassName();
             case 'attribute_set_id':
-                $attributeSet = $this->entityAttributeSetFactory->create()->load($product->getAttributeSetId());
-                return $attributeSet->getAttributeSetName();
+                return $this->getAttributeSetNameById((int) $attrData);
+            case 'tax_class_id':
+                return $this->getTaxClassNameById((int) $attrData);
             case 'visibility':
-                return $this->getVisibility($attrData);
+                return $this->getVisibility((string) $attrData);
             case 'status':
                 return $attrData == 2 ? 'Disabled' : 'Enabled';
             default:
@@ -719,6 +771,16 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 if (!$selectionsCollection->count()) {
                     return $bundlePrice;
                 }
+                $selectionProductIds = array_column($selectionsCollection->toArray(), 'product_id');
+                $selectionProducts = $this->productCollectionFactory->create()
+                    ->addStoreFilter($storeId)
+                    ->addFieldToFilter('entity_id', ['in' => $selectionProductIds])
+                    ->addAttributeToSelect('price')
+                    ->getItems();
+                $priceMap = [];
+                foreach ($selectionProducts as $item) {
+                    $priceMap[$item->getId()] = (float) $item->getPrice();
+                }
                 foreach ($optionsCollection as $option) {
                     if (!$option->getRequired()) {
                         continue;
@@ -726,20 +788,14 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                     $defaultSelections = $selectionsCollection->getItemsByColumnValue('option_id', $option->getId());
                     $minSelectionPrice = null;
                     foreach ($defaultSelections as $selection) {
-                        try {
-                            $itemProduct = $this->productRepository->getById(
-                                (int) $selection->getProductId(),
-                                false,
-                                $storeId
-                            );
-                            $itemPrice = (float) $itemProduct->getPrice();
+                        $itemId = (int) $selection->getProductId();
+                        if (isset($priceMap[$itemId])) {
+                            $itemPrice = $priceMap[$itemId];
                             $itemQty = (float) $selection->getSelectionQty();
                             $currentSelectionPrice = $itemPrice * $itemQty;
                             if ($minSelectionPrice === null || $currentSelectionPrice < $minSelectionPrice) {
                                 $minSelectionPrice = $currentSelectionPrice;
                             }
-                        } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
-                            continue;
                         }
                     }
                     if ($minSelectionPrice !== null) {
@@ -777,6 +833,28 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         return $product->getTypeId() === 'bundle'
             ? $price * ((float) $specialPrice / 100)
             : (float) $specialPrice;
+    }
+
+    /**
+     * Get Attribute Set Name by ID
+     *
+     * @param int $attributeSetId
+     * @return string
+     */
+    public function getAttributeSetNameById(int $attributeSetId): string
+    {
+        return $this->attributeSetNameCache[$attributeSetId] ?? '';
+    }
+
+    /**
+     * Get Tax Class Name by ID
+     *
+     * @param int $taxClassId
+     * @return string
+     */
+    public function getTaxClassNameById(int $taxClassId): string
+    {
+        return $this->taxClassNameCache[$taxClassId] ?? '';
     }
 
     /**
@@ -1306,8 +1384,34 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      *
      * @return bool
      */
-    public function isMSIEnabled()
+    public function isMSIEnabled(): bool
     {
         return $this->moduleManager->isEnabled('Magento_Inventory');
+    }
+
+    /**
+     * Initialize the logger
+     *
+     * @return void
+     */
+    public function initializeLogger(): void
+    {
+        $logDir = $this->filesystem->getDirectoryWrite(DirectoryList::LOG);
+        $writer = new \Zend_Log_Writer_Stream($logDir->getAbsolutePath($this->logFile));
+        $this->logger = new \Zend_Log();
+        $this->logger->addWriter($writer);
+    }
+
+    /**
+     * Log message
+     *
+     * @param string $message
+     * @return void
+     */
+    public function log(string $message): void
+    {
+        if ($this->logger) {
+            $this->logger->info($message);
+        }
     }
 }

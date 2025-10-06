@@ -52,15 +52,15 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
     /**
      * @var string
      */
-    public $logFile = "wr_io_order_import.log";
+    public string $logFile = "wr_io_order_import.log";
     /**
      * @var bool
      */
-    public $isTaxInclusive = false;
+    public bool $isTaxInclusive = false;
     /**
      * @var bool
      */
-    public $originalPriceInclTax = false;
+    public bool $originalPriceInclTax = false;
     /**
      * @var array
      */
