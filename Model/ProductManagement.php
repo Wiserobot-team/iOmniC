@@ -43,7 +43,6 @@ use Magento\Framework\Webapi\Exception as WebapiException;
 use WiseRobot\Io\Helper\ProductAttribute as ProductAttributeHelper;
 use WiseRobot\Io\Helper\Category as CategoryHelper;
 use WiseRobot\Io\Helper\Image as ImageHelper;
-use WiseRobot\Io\Model\ProductImageFactory;
 
 class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 {
@@ -192,10 +191,6 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @var ImageHelper
      */
     public $imageHelper;
-    /**
-     * @var ProductImageFactory
-     */
-    public $productImageFactory;
 
     /**
      * @param ScopeConfigInterface $scopeConfig
@@ -224,7 +219,6 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @param ProductAttributeHelper $productAttributeHelper
      * @param CategoryHelper $categoryHelper
      * @param ImageHelper $imageHelper
-     * @param ProductImageFactory $productImageFactory
      */
     public function __construct(
         ScopeConfigInterface $scopeConfig,
@@ -252,8 +246,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         AttributeRepositoryInterface $attributeRepositoryInterface,
         ProductAttributeHelper $productAttributeHelper,
         CategoryHelper $categoryHelper,
-        ImageHelper $imageHelper,
-        ProductImageFactory $productImageFactory
+        ImageHelper $imageHelper
     ) {
         $this->scopeConfig = $scopeConfig;
         $this->filesystem = $filesystem;
@@ -283,7 +276,6 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->categoryHelper = $categoryHelper;
         $this->categoryHelper->logModel = $this;
         $this->imageHelper = $imageHelper;
-        $this->productImageFactory = $productImageFactory;
         $this->initializeResults();
         $this->initializeLogger();
     }
@@ -419,14 +411,6 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->isNewProduct = true;
         $this->newProductDefaults = ['default' => []];
         $product = $this->productFactory->create();
-
-        // Cleanup temporary image records for new product
-        /*$ioProductImages = $this->productImageFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('sku', $sku);
-        foreach ($ioProductImages as $ioProductImage) {
-            $ioProductImage->delete();
-        }*/
 
         $attributeSetId = $this->productResource->getEntityType()->getDefaultAttributeSetId();
         if (!empty($attributeInfo['attribute_set'])) {
@@ -720,11 +704,25 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 
         // import images
         try {
-            if (!empty($productData['images'])) {
+            $imagesToImport = $productData['images'] ?? [];
+            if (!empty($imagesToImport)) {
                 $product = $this->productFactory->create()
                     ->setStoreId(0)
                     ->load($productId);
-                $this->importImages($product, $productData['images']);
+                if ($product && $product->getId()) {
+                    $newIoImages = $this->serializeImageArray($imagesToImport);
+                    $currentIoImages = (string) $product->getData('io_images');
+                    if ($currentIoImages !== $newIoImages) {
+                        $totalImagesAdded = $this->importImages($product, $imagesToImport);
+                        $product->setData('io_images', $newIoImages);
+                        if ($totalImagesAdded > 0 || $product->hasDataChanges()) {
+                            $product->save();
+                            $message = "SAVED: sku '" . $product->getSku() . "' - product id <" .
+                                $product->getId() . "> saved successfully";
+                            $this->addMessageAndLog($message, "success", "image");
+                        }
+                    }
+                 }
             }
         } catch (\Exception $e) {
             $message = "ERROR: sku '" . $sku . "' - product id <" .
@@ -998,6 +996,21 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             $this->results["response"]["category"]["success"][] = $message;
             $this->log($message);
         }
+    }
+
+    /**
+     * Converts the image array into the string format (ITEMIMAGEURLx=...)
+     *
+     * @param array $imageArray
+     * @return string
+     */
+    public function serializeImageArray(array $imageArray): string
+    {
+        $pairs = [];
+        foreach ($imageArray as $key => $value) {
+            $pairs[] = trim($key) . '=' . trim($value);
+        }
+        return implode(',', $pairs);
     }
 
     /**

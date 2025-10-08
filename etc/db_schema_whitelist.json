@@ -1,16 +1,4 @@
 {
-    "wr_io_product_image": {
-        "column": {
-            "id": true,
-            "sku": true,
-            "store_id": true,
-            "image": true,
-            "image_placement": true
-        },
-        "constraint": {
-            "PRIMARY": true
-        }
-    },
     "wr_io_order": {
         "column": {
             "id": true,

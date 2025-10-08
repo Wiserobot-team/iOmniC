@@ -17,61 +17,41 @@ namespace WiseRobot\Io\Helper;
 
 use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
-use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\Framework\Filesystem\Driver\File as DriverFile;
 use Magento\Catalog\Model\ProductFactory;
-use Magento\Framework\Filesystem\Driver\File;
-use WiseRobot\Io\Model\ProductImageFactory;
 
 class Image extends \Magento\Framework\App\Helper\AbstractHelper
 {
-    /**
-     * @var array
-     */
-    public array $currentPlacements = [];
     /**
      * @var Filesystem
      */
     public $filesystem;
     /**
-     * @var ScopeConfigInterface
+     * @var DriverFile
      */
-    public $scopeConfig;
+    public $driverFile;
     /**
      * @var ProductFactory
      */
     public $productFactory;
-    /**
-     * @var File
-     */
-    public $driverFile;
-    /**
-     * @var ProductImageFactory
-     */
-    public $productImageFactory;
 
     /**
      * @param Filesystem $filesystem
-     * @param ScopeConfigInterface $scopeConfig
+     * @param DriverFile $driverFile
      * @param ProductFactory $productFactory
-     * @param File $driverFile
-     * @param ProductImageFactory $productImageFactory
      */
     public function __construct(
         Filesystem $filesystem,
-        ScopeConfigInterface $scopeConfig,
-        ProductFactory $productFactory,
-        File $driverFile,
-        ProductImageFactory $productImageFactory
+        DriverFile $driverFile,
+        ProductFactory $productFactory
     ) {
         $this->filesystem = $filesystem;
-        $this->scopeConfig = $scopeConfig;
-        $this->productFactory = $productFactory;
         $this->driverFile = $driverFile;
-        $this->productImageFactory = $productImageFactory;
+        $this->productFactory = $productFactory;
     }
 
     /**
-     * Populate image to product gallery
+     * Populates images to product gallery
      *
      * @param \Magento\Catalog\Model\Product $product
      * @param array $imagePlacementsToSet
@@ -87,74 +67,77 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         if (!$product || !$product->getId()) {
             return $totalImagesAdded;
         }
-        $sku = $product->getSku();
-        $productId = $product->getId();
-        $this->currentPlacements = [];
-        $numberOfImagePlacements = count($imagePlacementsToSet) ? count($imagePlacementsToSet) : 10;
-        for ($i = 1; $i <= $numberOfImagePlacements; $i++) {
-            $this->currentPlacements[] = [
-                'name' => "ITEMIMAGEURL" . $i,
-                'image_placement_order' => $i
-            ];
-        }
-        $currentImagePlacements = $this->currentPlacements;
-        $oldImages = $this->getProductImageImportUrl($sku);
-
-        // flag for product base image
-        $flag = true;
-        foreach ($currentImagePlacements as $currentImagePlacement) {
-            $currentPlacementName = $currentImagePlacement["name"];
-            $imgPos = $currentImagePlacement["image_placement_order"];
-            // if it has image to set
-            if (isset($imagePlacementsToSet[$currentPlacementName])) {
-                if (isset($oldImages[$currentPlacementName])
-                    && $oldImages[$currentPlacementName]['image'] == $imagePlacementsToSet[$currentPlacementName]) {
-                    $flag = false;
-                    // if stored image url is same as current url then we do nothing
-                    continue;
-                }
-                // if stored image url is NOT same as current url
-                $imageUrl = $imagePlacementsToSet[$currentPlacementName];
-                // remove old image from product
+        $oldImagesString = (string) $product->getData('io_images');
+        $oldImagePlacements = $this->parseOldImageUrls($oldImagesString);
+        $placementKeys = array_keys($imagePlacementsToSet);
+        usort($placementKeys, function($a, $b) {
+            return (int) filter_var($a, FILTER_SANITIZE_NUMBER_INT) <=> (int) filter_var($b, FILTER_SANITIZE_NUMBER_INT);
+        });
+        $isMainImage = true;
+        foreach ($placementKeys as $placementName) {
+            $imageUrl = $imagePlacementsToSet[$placementName];
+            $imgPos = (int) preg_replace('/[^0-9]/', '', $placementName);
+            $imgPos = $imgPos > 0 ? $imgPos : 1;
+            $oldImageUrl = $oldImagePlacements[$imgPos] ?? null;
+            $shouldRemoveOldImage = true;
+            if ($oldImageUrl && $oldImageUrl === $imageUrl) {
+                $shouldRemoveOldImage = false;
+            }
+            if ($shouldRemoveOldImage) {
                 $this->removeImage($product, $imgPos, $productManagement);
-
-                // add current url image to product
+            }
+            if (!empty($imageUrl) && $shouldRemoveOldImage) {
                 $addedImageCount = $this->addImageToProductGallery(
                     $product,
                     $imageUrl,
-                    $flag,
+                    $isMainImage,
                     $imgPos,
                     $productManagement
                 );
                 if ($addedImageCount) {
-                    $totalImagesAdded = $totalImagesAdded + $addedImageCount;
-                } else {
-                    unset($imagePlacementsToSet[$currentPlacementName]);
+                    $totalImagesAdded += $addedImageCount;
                 }
-            } elseif (isset($oldImages[$currentPlacementName])) {
-                // if has NO image to set but old data exist then remove that image
-                $totalImagesAdded ++;
-                $this->removeImage($product, $imgPos, $productManagement);
             }
-            $flag = false;
-        }
-
-        $this->saveProductImageImportUrl($sku, $imagePlacementsToSet);
-
-        if ($totalImagesAdded) {
-            try {
-                $product->save();
-                $message = "SAVED: sku '" . $sku . "' - product id <" . $productId . "> saved successfully";
-                $productManagement->results["response"]["image"]["success"][] = $message;
-                $productManagement->log($message);
-            } catch (\Exception $e) {
-                $message = "ERROR: sku '" . $sku . "' - product id <" . $productId . "> set image: " .  $e->getMessage();
-                $productManagement->results["response"]["image"]["error"][] = $message;
-                $productManagement->log($message);
+            if ($isMainImage === true) {
+                $isMainImage = false;
             }
         }
-
+        $newImgPositions = array_map(function($key) {
+            return (int) preg_replace('/[^0-9]/', '', $key);
+        }, array_keys($imagePlacementsToSet));
+        foreach ($oldImagePlacements as $pos => $url) {
+            if (!in_array($pos, $newImgPositions)) {
+                $this->removeImage($product, $pos, $productManagement);
+            }
+        }
         return $totalImagesAdded;
+    }
+
+    /**
+     * Parses the old image URL string
+     *
+     * @param string|null $oldImagesString
+     * @return array
+     */
+    public function parseOldImageUrls(?string $oldImagesString): array
+    {
+        $parsedImages = [];
+        if (empty($oldImagesString)) {
+            return $parsedImages;
+        }
+        $pairs = explode(',', $oldImagesString);
+        foreach ($pairs as $pair) {
+            $parts = explode('=', $pair, 2);
+            if (count($parts) === 2) {
+                $key = trim($parts[0]);
+                $url = trim($parts[1]);
+                $position = (int) preg_replace('/[^0-9]/', '', $key);
+                if ($position > 0 && !empty($url)) {
+                    $parsedImages[$position] = $url;
+                }
+            }
+        }
+        return $parsedImages;
     }
 
     /**
@@ -174,77 +157,62 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         int $position,
         \WiseRobot\Io\Model\ProductManagement $productManagement
     ): int {
-        $sku = $product->getSku();
-        $productId = $product->getId();
         $dir = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
             ->getAbsolutePath('io');
         if (!$this->driverFile->isExists($dir)) {
             $this->driverFile->createDirectory($dir);
         }
-        $imageName = explode("/", (string) $imageUrl);
-        $imageName = end($imageName);
-        // replace all none standard character with _
+        $imageName = basename((string) $imageUrl);
         $imageName = preg_replace('/[^a-z0-9_\\-\\.]+/i', '_', $imageName);
-        $imageName = $product->getSku() . "_" . $imageName;
-        $path = $dir . "/" . $imageName;
-
+        $uniqueId = uniqid((string) mt_rand(), true);
+        $uniqueFilename = $product->getSku() . "_" . $uniqueId . "_" . $imageName;
+        $path = $dir . "/" . $uniqueFilename;
         try {
-            $imageUrl = str_replace(" ", "%20", (string) $imageUrl);
             $isCopy = $this->driverFile->copy($imageUrl, $path);
-            if ($isCopy) {
-                if ($isMainImage) {
-                    $mediaArray = [
-                        "thumbnail",
-                        "small_image",
-                        "image"
-                    ];
-                } else {
-                    $mediaArray = null;
-                }
-
+            $fileSize = $this->driverFile->isFile($path) ? $this->driverFile->stat($path)['size'] : 0;
+            if ($isCopy && $this->driverFile->isExists($path) && $fileSize > 0) {
+                $mediaArray = $isMainImage ? ["thumbnail", "small_image", "image"] : [];
                 $product->addImageToMediaGallery($path, $mediaArray, false, false);
-
-                $gallery = $product->getData("media_gallery");
-                // get image just added
-                $lastImage = array_pop($gallery["images"]);
-                $lastImage["position"] = $position;
-                // re-add that image
-                array_push($gallery["images"], $lastImage);
-                $product->setData("media_gallery", $gallery);
-
-                $message = "Added image '" . $imageUrl . "' at position " .
-                    $position . " to '" . $sku . "' - product id <" . $productId . ">";
-                $productManagement->results["response"]["image"]["success"][] = $message;
-                $productManagement->log($message);
-
                 if ($this->driverFile->isExists($path)) {
-                    try {
-                        $this->driverFile->deleteFile($path);
-                    } catch (\Exception $error) {
-                        $errorMessage = 'Error while delete file: ' . $error->getMessage();
-                        $productManagement->log($errorMessage);
+                    $this->driverFile->deleteFile($path);
+                }
+                $gallery = $product->getData("media_gallery");
+                if (!empty($gallery["images"])) {
+                    end($gallery["images"]);
+                    $lastImageIndex = key($gallery["images"]);
+                    if (isset($gallery["images"][$lastImageIndex])) {
+                        $gallery["images"][$lastImageIndex]["position"] = $position;
+                        $product->setData("media_gallery", $gallery);
                     }
                 }
-
+                $message = "Added image '" . $imageUrl . "' at position " . $position . " to '" .
+                    $product->getSku() . "' - product id <" . $product->getId() . ">";
+                $productManagement->results["response"]["image"]["success"][] = $message;
+                $productManagement->log($message);
                 return 1;
             } else {
                 $message = "WARN get image '" . $imageUrl . "' failed" . " for '" .
-                    $product->getSku() . "' - product id <" . $product->getId() . ">" ;
+                    $product->getSku() . "' - product id <" . $product->getId() . ">";
                 $productManagement->results["response"]["image"]["error"][] = $message;
                 $productManagement->log($message);
+                if ($this->driverFile->isExists($path)) {
+                    $this->driverFile->deleteFile($path);
+                }
             }
         } catch (\Exception $e) {
             $message = "WARN get image '" . $imageUrl . "' failed for '" .
-                $sku . "' - product id <" . $productId . "> : " . $e->getMessage();
+                $product->getSku() . "' - product id <" . $product->getId() . "> : " . $e->getMessage();
             $productManagement->results["response"]["image"]["error"][] = $message;
             $productManagement->log($message);
+            if ($this->driverFile->isExists($path)) {
+                $this->driverFile->deleteFile($path);
+            }
         }
-
         return 0;
     }
 
     /**
-     * Remove product images
+     * Remove product image by position from the media gallery data
      *
      * @param \Magento\Catalog\Model\Product $product
      * @param int $position
@@ -256,97 +224,35 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         int $position,
         \WiseRobot\Io\Model\ProductManagement $productManagement
     ): void {
-        $sku = $product->getSku();
-        $productId = $product->getId();
         try {
             $gallery = $product->getData("media_gallery");
-            if ($gallery && is_array($gallery) && count($gallery) && isset($gallery["images"])) {
+            if (!empty($gallery['images']) && is_array($gallery['images'])) {
                 foreach ($gallery["images"] as &$image) {
-                    if ($image["position"] == $position) {
+                    if (isset($image["position"]) && (int) $image["position"] === $position && empty($image["removed"])) {
                         $image["removed"] = 1;
-                        $this->deleteProductImage($image["file"], $productManagement);
-                        $nameImage = explode("/", (string) $image["file"]);
-                        $tamp = count($nameImage);
-                        $message = "Sku '" . $sku . "' - product id <" .
-                            $productId . "> " . "deleted image '". $nameImage[$tamp-1] . "' at position " . $position;
+                        if (!empty($image["file"])) {
+                            $this->deleteProductImage($image["file"], $productManagement);
+                        }
+                        $nameImage = basename((string) $image["file"]);
+                        $message = "Deleted image '" . $nameImage . "' at position " . $position . " for '" .
+                            $product->getSku() . "' - product id <" . $product->getId() . ">";
                         $productManagement->results["response"]["image"]["success"][] = $message;
                         $productManagement->log($message);
+                        $product->setData("media_gallery", $gallery);
+                        break;
                     }
                 }
-                $product->setData("media_gallery", $gallery);
-                $product->save();
-                $product = $this->productFactory->create()
-                    ->setStoreId(0)
-                    ->load($product->getId());
             }
         } catch (\Exception $e) {
-            $message = "ERROR: sku '" . $sku . "' - product id <" . $productId . "> remove image: " .  $e->getMessage();
+            $message = "ERROR: sku '" . $product->getSku() . "' - product id <" .
+                $product->getId() . "> remove image: " .  $e->getMessage();
             $productManagement->results["response"]["image"]["error"][] = $message;
             $productManagement->log($message);
-            $this->deleteStoredProductImages($product->getSku());
         }
     }
 
     /**
-     * Get product images
-     *
-     * @param string $sku
-     * @return array
-     */
-    public function getProductImageImportUrl(string $sku): array
-    {
-        $imageList = [];
-        $imageCollection = $this->productImageFactory->create()
-            ->getCollection()
-            ->addFieldToFilter('sku', $sku);
-        foreach ($imageCollection as $image) {
-            $imageList[$image->getImagePlacement()] = [
-                'id' => $image->getId(),
-                'image' => $image->getImage()
-            ];
-        }
-
-        return $imageList;
-    }
-
-    /**
-     * Save product image from image list
-     *
-     * @param string $sku
-     * @param array $imageList
-     * @return void
-     */
-    public function saveProductImageImportUrl(string $sku, array $imageList): void
-    {
-        $oldList = $this->getProductImageImportUrl($sku);
-        $currentImagePlacements = $this->currentPlacements;
-        foreach ($currentImagePlacements as $imagePlacement) {
-            $currentPlacementName = $imagePlacement["name"];
-            if (isset($imageList[$currentPlacementName])) {
-                $ioImage = $this->productImageFactory->create();
-                if (isset($oldList[$currentPlacementName])) {
-                    if ($oldList[$currentPlacementName]['image'] == $imageList[$currentPlacementName]) {
-                        continue;
-                    }
-                    $ioImage->load($oldList[$currentPlacementName]['id']);
-                } else {
-                    $ioImage->setSku($sku)
-                        ->setImagePlacement($currentPlacementName);
-                }
-                $ioImage->setImage($imageList[$currentPlacementName]);
-                $ioImage->save();
-            } else {
-                if (isset($oldList[$currentPlacementName])) {
-                    $ioImage = $this->productImageFactory->create()
-                        ->load($oldList[$currentPlacementName]['id']);
-                    $ioImage->delete();
-                }
-            }
-        }
-    }
-
-    /**
-     * Delete product image file
+     * Delete product image file from the file system
      *
      * @param string $path
      * @param \WiseRobot\Io\Model\ProductManagement $productManagement
@@ -358,30 +264,14 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
     ): void {
         $imagePath = 'catalog/product/' . trim((string) $path, ' /');
         $filePath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
-                ->getAbsolutePath('') . $imagePath;
+            ->getAbsolutePath('') . $imagePath;
         if ($this->driverFile->isExists($filePath)) {
             try {
                 $this->driverFile->deleteFile($filePath);
             } catch (\Exception $error) {
-                $errorMessage = 'Error while delete product image: ' . $error->getMessage();
-                $productManagement->log($errorMessage);
+                $message = 'Error while deleting product image file: ' . $error->getMessage();
+                $productManagement->log($message);
             }
-        }
-    }
-
-    /**
-     * Delete stored product images
-     *
-     * @param string $sku
-     * @return void
-     */
-    public function deleteStoredProductImages(string $sku): void
-    {
-        $ioProductImages = $this->productImageFactory->create()
-            ->getCollection()
-            ->addFieldToFilter("sku", $sku);
-        foreach ($ioProductImages as $ioProductImage) {
-            $ioProductImage->delete();
         }
     }
 }
