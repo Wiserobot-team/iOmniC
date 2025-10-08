@@ -85,6 +85,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
             }
             if ($shouldRemoveOldImage) {
                 $this->removeImage($product, $imgPos, $productManagement);
+                $totalImagesChanges++;
             }
             if (!empty($imageUrl) && $shouldRemoveOldImage) {
                 $addedImageCount = $this->addImageToProductGallery(
