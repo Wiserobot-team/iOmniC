@@ -63,9 +63,9 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         array $imagePlacementsToSet,
         \WiseRobot\Io\Model\ProductManagement $productManagement
     ): int {
-        $totalImagesAdded = 0;
+        $totalImagesChanges = 0;
         if (!$product || !$product->getId()) {
-            return $totalImagesAdded;
+            return $totalImagesChanges;
         }
         $oldImagesString = (string) $product->getData('io_images');
         $oldImagePlacements = $this->parseOldImageUrls($oldImagesString);
@@ -95,7 +95,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                     $productManagement
                 );
                 if ($addedImageCount) {
-                    $totalImagesAdded += $addedImageCount;
+                    $totalImagesChanges += $addedImageCount;
                 }
             }
             if ($isMainImage === true) {
@@ -108,9 +108,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         foreach ($oldImagePlacements as $pos => $url) {
             if (!in_array($pos, $newImgPositions)) {
                 $this->removeImage($product, $pos, $productManagement);
+                $totalImagesChanges++;
             }
         }
-        return $totalImagesAdded;
+        return $totalImagesChanges;
     }
 
     /**

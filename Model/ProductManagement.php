@@ -713,9 +713,9 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     $newIoImages = $this->serializeImageArray($imagesToImport);
                     $currentIoImages = (string) $product->getData('io_images');
                     if ($currentIoImages !== $newIoImages) {
-                        $totalImagesAdded = $this->importImages($product, $imagesToImport);
+                        $totalImagesChanges = $this->importImages($product, $imagesToImport);
                         $product->setData('io_images', $newIoImages);
-                        if ($totalImagesAdded > 0 || $product->hasDataChanges()) {
+                        if ($totalImagesChanges > 0 || $product->hasDataChanges()) {
                             $product->save();
                             $message = "SAVED: sku '" . $product->getSku() . "' - product id <" .
                                 $product->getId() . "> saved successfully";
