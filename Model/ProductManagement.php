@@ -39,6 +39,8 @@ use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use Magento\Catalog\Model\ResourceModel\Product as ProductResource;
 use Magento\Catalog\Model\CategoryFactory;
 use Magento\Eav\Api\AttributeRepositoryInterface;
+use Magento\Eav\Model\ResourceModel\Entity\Attribute\Set\CollectionFactory as AttributeSetCollectionFactory;
+use Magento\Tax\Model\ResourceModel\TaxClass\CollectionFactory as TaxClassCollectionFactory;
 use Magento\Framework\Webapi\Exception as WebapiException;
 use WiseRobot\Io\Helper\ProductAttribute as ProductAttributeHelper;
 use WiseRobot\Io\Helper\Category as CategoryHelper;
@@ -69,6 +71,10 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     /**
      * @var array
      */
+    public array $taxClassCache = [];
+    /**
+     * @var array
+     */
     public array $attributeCodesInSetCache = [];
     /**
      * @var array
@@ -77,16 +83,16 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     /**
      * Define Constants
      */
-    public const VISIBILITY_CATALOG_SEARCH = 4;
-    public const VISIBILITY_IN_SEARCH = 3;
-    public const VISIBILITY_IN_CATALOG = 2;
-    public const VISIBILITY_NOT_VISIBLE = 1;
-    public const STATUS_ENABLED = 1;
-    public const STATUS_DISABLED = 2;
-    public const TAX_CLASS_NONE = 0;
     public const PRODUCT_TYPE_SIMPLE = 'simple';
     public const PRODUCT_TYPE_CONFIGURABLE = 'configurable';
     public const PRODUCT_TYPE_GROUPED = 'grouped';
+    public const STATUS_ENABLED = 1;
+    public const STATUS_DISABLED = 2;
+    public const TAX_CLASS_NONE = 0;
+    public const VISIBILITY_NOT_VISIBLE = 1;
+    public const VISIBILITY_IN_CATALOG = 2;
+    public const VISIBILITY_IN_SEARCH = 3;
+    public const VISIBILITY_CATALOG_SEARCH = 4;
     /**
      * @var ScopeConfigInterface
      */
@@ -180,6 +186,14 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public $attributeRepositoryInterface;
     /**
+     * @var AttributeSetCollectionFactory
+     */
+    public $attributeSetCollectionFactory;
+    /**
+     * @var TaxClassCollectionFactory
+     */
+    public $taxClassCollectionFactory;
+    /**
      * @var ProductAttributeHelper
      */
     public $productAttributeHelper;
@@ -244,6 +258,8 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         ProductResource $productResource,
         CategoryFactory $categoryFactory,
         AttributeRepositoryInterface $attributeRepositoryInterface,
+        AttributeSetCollectionFactory $attributeSetCollectionFactory,
+        TaxClassCollectionFactory $taxClassCollectionFactory,
         ProductAttributeHelper $productAttributeHelper,
         CategoryHelper $categoryHelper,
         ImageHelper $imageHelper
@@ -271,11 +287,15 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->productResource = $productResource;
         $this->categoryFactory = $categoryFactory;
         $this->attributeRepositoryInterface = $attributeRepositoryInterface;
+        $this->attributeSetCollectionFactory = $attributeSetCollectionFactory;
+        $this->taxClassCollectionFactory = $taxClassCollectionFactory;
         $this->productAttributeHelper = $productAttributeHelper;
         $this->productAttributeHelper->productAttribute = $this;
         $this->categoryHelper = $categoryHelper;
         $this->categoryHelper->logModel = $this;
         $this->imageHelper = $imageHelper;
+        $this->preloadAttributeSets();
+        $this->preloadTaxClasses();
         $this->initializeResults();
         $this->initializeLogger();
     }
@@ -383,6 +403,42 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     }
 
     /**
+     * Preloads all Attribute Set names into the cache
+     *
+     * @return void
+     */
+    public function preloadAttributeSets(): void
+    {
+        if (!empty($this->attributeSetCache)) {
+            return;
+        }
+        $entityTypeId = $this->productResource->getEntityType()->getEntityTypeId();
+        $collection = $this->attributeSetCollectionFactory->create()
+            ->setEntityTypeFilter($entityTypeId)
+            ->addFieldToSelect(['attribute_set_id', 'attribute_set_name']);
+        foreach ($collection as $item) {
+            $this->attributeSetCache[$item->getAttributeSetName()] = (int) $item->getAttributeSetId();
+        }
+    }
+
+    /**
+     * Preloads all Tax Class names into the cache
+     *
+     * @return void
+     */
+    public function preloadTaxClasses(): void
+    {
+        if (!empty($this->taxClassCache)) {
+            return;
+        }
+        $collection = $this->taxClassCollectionFactory->create()
+            ->addFieldToSelect(['class_id', 'class_name']);
+        foreach ($collection as $item) {
+            $this->taxClassCache[$item->getClassName()] = (int) $item->getClassId();
+        }
+    }
+
+    /**
      * Retrieves the product model for import
      *
      * @param int $store
@@ -415,14 +471,14 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->newProductDefaults = ['default' => []];
         $product = $this->productFactory->create();
 
-        $attributeSetId = $this->productResource->getEntityType()->getDefaultAttributeSetId();
+        $attributeSetId = (int) $this->productResource->getEntityType()->getDefaultAttributeSetId();
         if (!empty($attributeInfo['attribute_set'])) {
             $attributeSetName = $attributeInfo['attribute_set'];
-            $foundAttributeSetId = $this->getAttributeSetIdByName($attributeSetName);
+            $foundAttributeSetId = (int) $this->getAttributeSetIdByName($attributeSetName);
             if (!$foundAttributeSetId) {
                 $message = "ERROR: sku '" . $sku . "' attribute_set: '" . $attributeSetName . "' doesn't exist";
                 $this->addMessageAndLog($message, "error");
-            } else {
+            } else if ($attributeSetId !== $foundAttributeSetId) {
                 $attributeSetId = $foundAttributeSetId;
             }
         }
@@ -514,7 +570,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                             $attrCode = 'tax_class_id';
                             break;
                     }
-                    if (!in_array($attrCode, ['attribute_set_id', 'visibility', 'tax_class_id', 'status'])) {
+                    if (!in_array($attrCode, ['attribute_set_id', 'tax_class_id', 'visibility', 'status'])) {
                         // Handle select/dropdown attributes
                         $attribute = $this->getAttribute($attrCode);
                         if ($attribute && $attribute->getData("frontend_input") == "select" &&
@@ -1124,6 +1180,33 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     }
 
     /**
+     * Process Attribute Value by Code
+     *
+     * @param string $attrCode
+     * @param mixed $attrValue
+     * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
+     * @return mixed
+     */
+    public function processAttributeValue(string $attrCode, $attrValue, \Magento\Catalog\Model\Product $product, int $storeId)
+    {
+        switch ($attrCode) {
+            case 'attribute_set':
+                return $this->getAttributeSetIdByName((string) $attrValue);
+            case 'tax_class':
+                return $this->getTaxClassIdByName((string) $attrValue);
+            case 'visibility':
+                return $this->getVisibility((string) $attrValue);
+            case 'status':
+                return $this->getStatus((string) $attrValue);
+            case 'weight':
+                return floatval($attrValue);
+            default:
+                return $attrValue;
+        }
+    }
+
+    /**
      * Get Attribute Codes in Set
      *
      * @param int $attributeSetId
@@ -1137,10 +1220,9 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $attrsInSet = $this->productAttributeManagement->getAttributes($attributeSetId);
         $attrCodesInSet = ['type_id'];
         foreach ($attrsInSet as $attrInSet) {
-            $attrCodesInSet[] = $attrInSet->getData("attribute_code");
+            $attrCodesInSet[] = $attrInSet->getAttributeCode();
         }
         $this->attributeCodesInSetCache[$attributeSetId] = $attrCodesInSet;
-
         return $attrCodesInSet;
     }
 
@@ -1170,68 +1252,70 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             $this->attributeSetCache[$attributeSetName] = $attributeSetId;
             return $attributeSetId;
         }
-
         return null;
     }
 
     /**
-     * Process Attribute Value by Code
+     * Get Tax Class ID by Name
      *
-     * @param string $attrCode
-     * @param mixed $attrValue
-     * @param \Magento\Catalog\Model\Product $product
-     * @param int $storeId
-     * @return mixed
+     * @param string $taxClassName
+     * @return int|null
      */
-    public function processAttributeValue(string $attrCode, $attrValue, \Magento\Catalog\Model\Product $product, int $storeId)
+    public function getTaxClassIdByName(string $taxClassName): ?int
     {
-        switch ($attrCode) {
-            case 'attribute_set':
-                return $this->getAttributeSetIdByName((string) $attrValue);
-
-            case 'visibility':
-                $visibilityValue = (string) $attrValue;
-                switch ($visibilityValue) {
-                    case 'Catalog, Search':
-                        return self::VISIBILITY_CATALOG_SEARCH;
-                    case 'Search':
-                        return self::VISIBILITY_IN_SEARCH;
-                    case 'Catalog':
-                        return self::VISIBILITY_IN_CATALOG;
-                    case 'Not Visible Individually':
-                        return self::VISIBILITY_NOT_VISIBLE;
-                    default:
-                        return self::VISIBILITY_CATALOG_SEARCH;
-                }
-
-            case 'tax_class':
-                $taxClassValue = (string) $attrValue;
-                if ($taxClassValue === 'None') {
-                    return self::TAX_CLASS_NONE;
-                }
-                $taxClassCollection = $this->classModelFactory->create()
-                    ->getCollection()
-                    ->addFieldToFilter('class_type', \Magento\Tax\Model\ClassModel::TAX_CLASS_TYPE_PRODUCT)
-                    ->addFieldToFilter('class_name', $taxClassValue);
-
-                if ($taxClassCollection->getSize()) {
-                    return (int) $taxClassCollection->getFirstItem()->getClassId();
-                }
-                return null;
-
-            case 'status':
-                $statusValue = strtolower((string) $attrValue);
-                if (in_array($attrValue, ['disabled', 'false', '2'])) {
-                    return self::STATUS_DISABLED;
-                }
-                return self::STATUS_ENABLED;
-
-            case 'weight':
-                return floatval($attrValue);
-
-            default:
-                return $attrValue;
+        $taxClassName = trim($taxClassName);
+        if (empty($taxClassName)) {
+            return null;
         }
+        if ($taxClassName === 'None') {
+            return self::TAX_CLASS_NONE;
+        }
+        if (isset($this->taxClassCache[$taxClassName])) {
+            return $this->taxClassCache[$taxClassName];
+        }
+        $taxClass = $this->classModelFactory->create()
+            ->getCollection()
+            ->addFieldToFilter('class_type', \Magento\Tax\Model\ClassModel::TAX_CLASS_TYPE_PRODUCT)
+            ->addFieldToFilter('class_name', $taxClassName)
+            ->getFirstItem();
+        $taxClassId = (int) $taxClass->getClassId();
+        if ($taxClassId) {
+            $this->taxClassCache[$taxClassName] = $taxClassId;
+            return $taxClassId;
+        }
+        return null;
+    }
+
+    /**
+     * Get Visibility
+     *
+     * @param string $visibility
+     * @return int
+     */
+    public function getVisibility(string $visibility): int
+    {
+        return match ($visibility) {
+            'Catalog, Search' => self::VISIBILITY_CATALOG_SEARCH,
+            'Search' => self::VISIBILITY_IN_SEARCH,
+            'Catalog' => self::VISIBILITY_IN_CATALOG,
+            'Not Visible Individually' => self::VISIBILITY_NOT_VISIBLE,
+            default => self::VISIBILITY_CATALOG_SEARCH,
+        };
+    }
+
+    /**
+     * Get Status ID by Name or Value
+     *
+     * @param string $status
+     * @return int
+     */
+    public function getStatus(string $status): int
+    {
+        $statusValue = strtolower(trim($status));
+        return match ($statusValue) {
+            'disabled', 'false', '2' => self::STATUS_DISABLED,
+            default => self::STATUS_ENABLED,
+        };
     }
 
     /**

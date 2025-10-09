@@ -24,6 +24,7 @@ use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use Magento\Eav\Model\ResourceModel\Entity\Attribute\Set\CollectionFactory as AttributeSetCollectionFactory;
 use Magento\Tax\Model\ResourceModel\TaxClass\CollectionFactory as TaxClassCollectionFactory;
 use Magento\Catalog\Model\CategoryFactory;
+use Magento\Catalog\Model\ResourceModel\Product as ProductResource;
 use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as ConfigurableProduct;
 use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
 use Magento\Bundle\Model\Product\Type as BundleProduct;
@@ -59,11 +60,11 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * @var array
      */
-    public array $attributeSetNameCache = [];
+    public array $attributeSetCache = [];
     /**
      * @var array
      */
-    public array $taxClassNameCache = [];
+    public array $taxClassCache = [];
     /**
      * @var Filesystem
      */
@@ -96,6 +97,10 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @var CategoryFactory
      */
     public $categoryFactory;
+    /**
+     * @var ProductResource
+     */
+    public $productResource;
     /**
      * @var ConfigurableProduct
      */
@@ -138,6 +143,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      * @param AttributeSetCollectionFactory $attributeSetCollectionFactory
      * @param TaxClassCollectionFactory $taxClassCollectionFactory
      * @param CategoryFactory $categoryFactory
+     * @param ProductResource $productResource
      * @param ConfigurableProduct $configurableProduct
      * @param GroupedProduct $groupedProduct
      * @param BundleProduct $bundleProduct
@@ -156,6 +162,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         AttributeSetCollectionFactory $attributeSetCollectionFactory,
         TaxClassCollectionFactory $taxClassCollectionFactory,
         CategoryFactory $categoryFactory,
+        ProductResource $productResource,
         ConfigurableProduct $configurableProduct,
         GroupedProduct $groupedProduct,
         BundleProduct $bundleProduct,
@@ -173,6 +180,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $this->attributeSetCollectionFactory = $attributeSetCollectionFactory;
         $this->taxClassCollectionFactory = $taxClassCollectionFactory;
         $this->categoryFactory = $categoryFactory;
+        $this->productResource = $productResource;
         $this->configurableProduct = $configurableProduct;
         $this->groupedProduct = $groupedProduct;
         $this->bundleProduct = $bundleProduct;
@@ -181,6 +189,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $this->resourceConnection = $resourceConnection;
         $this->moduleManager = $moduleManager;
         $this->objectManager = $objectManager;
+        $this->preloadAttributeSets();
+        $this->preloadTaxClasses();
         $this->initializeLogger();
     }
 
@@ -271,8 +281,6 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         $this->applyFilter($productCollection, $filter);
         $this->applySortingAndPaging($productCollection, $page, $limit);
         $this->addMediaGallery($productCollection);
-        $this->preloadAttributeSets();
-        $this->preloadTaxClasses();
         $result = [];
         $storeId = (int) $storeInfo->getId();
         $storeName = $storeInfo->getName();
@@ -493,13 +501,15 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public function preloadAttributeSets(): void
     {
-        if (!empty($this->attributeSetNameCache)) {
+        if (!empty($this->attributeSetCache)) {
             return;
         }
+        $entityTypeId = $this->productResource->getEntityType()->getEntityTypeId();
         $collection = $this->attributeSetCollectionFactory->create()
+            ->setEntityTypeFilter($entityTypeId)
             ->addFieldToSelect(['attribute_set_id', 'attribute_set_name']);
         foreach ($collection as $item) {
-            $this->attributeSetNameCache[(int) $item->getAttributeSetId()] = $item->getAttributeSetName();
+            $this->attributeSetCache[(int) $item->getAttributeSetId()] = $item->getAttributeSetName();
         }
     }
 
@@ -510,13 +520,13 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public function preloadTaxClasses(): void
     {
-        if (!empty($this->taxClassNameCache)) {
+        if (!empty($this->taxClassCache)) {
             return;
         }
         $collection = $this->taxClassCollectionFactory->create()
             ->addFieldToSelect(['class_id', 'class_name']);
         foreach ($collection as $item) {
-            $this->taxClassNameCache[(int) $item->getClassId()] = $item->getClassName();
+            $this->taxClassCache[(int) $item->getClassId()] = $item->getClassName();
         }
     }
 
@@ -843,7 +853,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public function getAttributeSetNameById(int $attributeSetId): string
     {
-        return $this->attributeSetNameCache[$attributeSetId] ?? '';
+        return $this->attributeSetCache[$attributeSetId] ?? '';
     }
 
     /**
@@ -854,7 +864,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      */
     public function getTaxClassNameById(int $taxClassId): string
     {
-        return $this->taxClassNameCache[$taxClassId] ?? '';
+        return $this->taxClassCache[$taxClassId] ?? '';
     }
 
     /**
