@@ -26,6 +26,7 @@ interface ProductManagementInterface
      * @param string[] $groupedInfo
      * @param string[] $stockInfo
      * @param string[] $imageInfo
+     * @param string[] $customInfo
      * @return array
      */
     public function import(
@@ -34,6 +35,7 @@ interface ProductManagementInterface
         array $variationInfo,
         array $groupedInfo = [],
         array $stockInfo = [],
-        array $imageInfo = []
+        array $imageInfo = [],
+        array $customInfo = [],
     ): array;
 }

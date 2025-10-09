@@ -306,6 +306,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @param string[] $groupedInfo
      * @param string[] $stockInfo
      * @param string[] $imageInfo
+     * @param string[] $customInfo
      * @return array
      * @throws \Magento\Framework\Webapi\Exception
      */
@@ -315,7 +316,8 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         array $variationInfo,
         array $groupedInfo = [],
         array $stockInfo = [],
-        array $imageInfo = []
+        array $imageInfo = [],
+        array $customInfo = []
     ): array {
         try {
             $this->validateProductInfo($store, $attributeInfo, $variationInfo);
@@ -334,6 +336,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                 $groupedInfo,
                 $stockInfo,
                 $imageInfo,
+                $customInfo,
                 $store
             );
             if ($this->isNewProduct) {
@@ -706,13 +709,16 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         try {
             $imagesToImport = $productData['images'] ?? [];
             if (!empty($imagesToImport)) {
-                $product = $this->productFactory->create()
-                    ->setStoreId(0)
-                    ->load($productId);
-                if ($product && $product->getId()) {
-                    $newIoImages = $this->serializeImageArray($imagesToImport);
-                    $currentIoImages = (string) $product->getData('io_images');
-                    if ($currentIoImages !== $newIoImages) {
+                $newIoImages = $this->serializeImageArray($imagesToImport);
+                $currentIoImages = (string) $product->getData('io_images');
+                $isDeleteRequested = !empty($productData['custom']['delete_existing_product_images']);
+                $isImageChangeNeeded = ($currentIoImages !== $newIoImages);
+                if ($isImageChangeNeeded) {
+                    if ($isDeleteRequested) {
+                        $this->deleteExistingProductImages($product);
+                    }
+                    $product = $this->productFactory->create()->load($productId);
+                    if ($product && $product->getId()) {
                         $totalImagesChanges = $this->importImages($product, $imagesToImport);
                         $product->setData('io_images', $newIoImages);
                         if ($totalImagesChanges > 0 || $product->hasDataChanges()) {
@@ -722,7 +728,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                             $this->addMessageAndLog($message, "success", "image");
                         }
                     }
-                 }
+                }
             }
         } catch (\Exception $e) {
             $message = "ERROR: sku '" . $sku . "' - product id <" .
@@ -741,13 +747,10 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             if (!$isConfigurableProcessingNeeded && !$isGroupedProcessingNeeded) {
                 return false;
             }
-            $product = $this->productFactory->create()
-                ->setStoreId($storeId)
-                ->load($productId);
+            $product = $this->productFactory->create()->setStoreId($storeId)->load($productId);
             if ($product->getTypeId() != 'grouped' && $isConfigurableProcessingNeeded) {
                 $parentSku = $variationData['parent_sku'];
-                $parentId = $this->productFactory->create()
-                    ->getIdBySku($parentSku);
+                $parentId = $this->productFactory->create()->getIdBySku($parentSku);
                 if (!$parentId) {
                     $message = "WARN: NOT PARENT '" . $parentSku . "'";
                     $this->addMessageAndLog($message, "warn", "variation");
@@ -1014,6 +1017,38 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     }
 
     /**
+     * Delete all existing media gallery entries (images) for a given product
+     *
+     * @param @param \Magento\Catalog\Model\Product $product
+     * @return bool
+     */
+    public function deleteExistingProductImages(
+        \Magento\Catalog\Model\Product $product
+    ): bool {
+        if (!$product || !$product->getId()) {
+            return false;
+        }
+        $existingMediaGalleryEntries = $product->getMediaGalleryEntries();
+        if ($existingMediaGalleryEntries && count($existingMediaGalleryEntries)) {
+            $product->setMediaGalleryEntries([]);
+            $product->setData('io_images', '');
+            try {
+                $this->productRepositoryInterface->save($product);
+                $message = "Delete existing images: sku '" . $product->getSku() . "' - product id <" .
+                $product->getId() . "> were deleted successfully";
+            $this->addMessageAndLog($message, "success", "custom");
+                return true;
+            } catch (\Exception $e) {
+                $message = "ERROR: sku '" . $product->getSku() . "' - product id <" .
+                    $product->getId() . "> Failed to delete existing images: " . $e->getMessage();
+                $this->addMessageAndLog($message, "error", "custom");
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Prepare Product Data for Import
      *
      * @param array $attributeInfo
@@ -1022,6 +1057,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @param string[] $groupedInfo
      * @param string[] $stockInfo
      * @param string[] $imageInfo
+     * @param string[] $customInfo
      * @param int $storeId
      * @return array
      */
@@ -1032,6 +1068,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         array $groupedInfo,
         array $stockInfo,
         array $imageInfo,
+        array $customInfo,
         int $storeId
     ): array {
         $result = [
@@ -1041,6 +1078,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             'grouped' => $groupedInfo,
             'stock' => $stockInfo,
             'images' => $imageInfo,
+            'custom' => $customInfo
         ];
         $categoryIdsToSet = [];
         $productAttributeSetId = (int) $product->getData("attribute_set_id");
@@ -1308,7 +1346,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function initializeResults(): void
     {
-        $sections = ['data', 'quantity', 'category', 'image', 'variation'];
+        $sections = ['data', 'quantity', 'category', 'image', 'variation', 'custom'];
         $this->results['response'] = [];
         foreach ($sections as $section) {
             $this->results['response'][$section] = [
