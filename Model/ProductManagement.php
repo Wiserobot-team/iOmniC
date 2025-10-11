@@ -25,6 +25,7 @@ use Magento\Tax\Model\ClassModelFactory;
 use Magento\Catalog\Api\Data\ProductLinkInterfaceFactory;
 use Magento\Catalog\Model\Product\Attribute\Repository as AttributeRepository;
 use Magento\Catalog\Api\CategoryLinkManagementInterface;
+use Magento\Catalog\Model\CategoryLinkRepository;
 use Magento\ConfigurableProduct\Helper\Product\Options\Factory as ConfigurableOptionFactory;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Catalog\Api\ProductAttributeManagementInterface as ProductAttributeManagement;
@@ -130,6 +131,10 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public $categoryLinkManagementInterface;
     /**
+     * @var CategoryLinkRepository
+     */
+    public $categoryLinkRepository;
+    /**
      * @var ConfigurableOptionFactory
      */
     public $productOptionFactory;
@@ -216,6 +221,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @param ProductLinkInterfaceFactory $productLink
      * @param AttributeRepository $productAttributeRepository
      * @param CategoryLinkManagementInterface $categoryLinkManagementInterface
+     * @param CategoryLinkRepository $categoryLinkRepository
      * @param ConfigurableOptionFactory $productOptionFactory
      * @param ProductRepositoryInterface $productRepositoryInterface
      * @param ProductAttributeManagement $productAttributeManagement
@@ -244,6 +250,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         ProductLinkInterfaceFactory $productLink,
         AttributeRepository $productAttributeRepository,
         CategoryLinkManagementInterface $categoryLinkManagementInterface,
+        CategoryLinkRepository $categoryLinkRepository,
         ConfigurableOptionFactory $productOptionFactory,
         ProductRepositoryInterface $productRepositoryInterface,
         ProductAttributeManagement $productAttributeManagement,
@@ -273,6 +280,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->productLink = $productLink;
         $this->productAttributeRepository = $productAttributeRepository;
         $this->categoryLinkManagementInterface = $categoryLinkManagementInterface;
+        $this->categoryLinkRepository = $categoryLinkRepository;
         $this->productOptionFactory = $productOptionFactory;
         $this->productRepositoryInterface = $productRepositoryInterface;
         $this->productAttributeManagement = $productAttributeManagement;
@@ -638,21 +646,92 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                 $oldQty = (int) $stockItem->getQty();
                 $isInStock = (bool) $stockItem->getData('is_in_stock');
                 $currentMinSaleQty = (int) $stockItem->getData('min_sale_qty');
-                $newQty = (int) $stockData['qty'];
                 $minCartQty = isset($stockData['min_sale_qty']) ? (int) $stockData['min_sale_qty'] : null;
-                if ($newQty > 0 && !$isInStock) {
+                $newQty = (int) $stockData['qty'];
+                $finalQtyToSave = $newQty;
+                // Inventory quantity buffering
+                if (isset($stockData['buffer_qty'])) {
+                    $bufferInput = trim((string) $stockData['buffer_qty']);
+                    $operator = null;
+                    $bufferValue = 0;
+                    if (preg_match('/^([+-])(\d+)$/', $bufferInput, $matches)) {
+                        $operator = $matches[1];
+                        $bufferValue = (int) $matches[2];
+                    } elseif (is_numeric($bufferInput) && $bufferInput > 0) {
+                        $operator = '-';
+                        $bufferValue = (int) $bufferInput;
+                    }
+                    if ($bufferValue > 0 && !empty($operator)) {
+                        $oldSetQty = $finalQtyToSave;
+                        if ($operator === "-") {
+                            $finalQtyToSave = max(0, $finalQtyToSave - $bufferValue);
+                        } elseif ($operator === "+") {
+                            $finalQtyToSave = $finalQtyToSave + $bufferValue;
+                        }
+                        $message = "BUFFER QTY: sku: '" . $sku . "' - product id <" .
+                            $productId . "> : Buffer '" . $bufferInput . "' from " .
+                            $oldSetQty . " to " . $finalQtyToSave;
+                        $this->addMessageAndLog($message, "success", "quantity");
+                    }
+                }
+                // Stock backorder configuration
+                if (isset($stockData['backorders'])) {
+                    $backordersValue = (int) $stockData['backorders'];
+                    if (in_array($backordersValue, [0, 1, 2])) {
+                        $currentBackorders = (int) $stockItem->getData('backorders');
+                        $currentUseConfig = (int) $stockItem->getData('use_config_backorders');
+                        if ($backordersValue === 0) {
+                            $shouldUpdate = false;
+                            if ($currentBackorders !== 0) {
+                                $stockUpdateData['backorders'] = 0;
+                                $shouldUpdate = true;
+                            }
+                            if ($currentUseConfig !== 1) {
+                                $stockUpdateData['use_config_backorders'] = 1;
+                                $shouldUpdate = true;
+                            }
+                            if ($shouldUpdate) {
+                                $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
+                                    "> : Input '" . $stockData['backorders'] .
+                                    "'. Set backorders to 0 and use_config_backorders to 1";
+                                $this->addMessageAndLog($message, "success", "quantity");
+                            }
+                        } elseif ($currentBackorders !== $backordersValue) {
+                            $stockUpdateData['backorders'] = $backordersValue;
+                            if ($currentUseConfig !== 0) {
+                                $stockUpdateData['use_config_backorders'] = 0;
+                            }
+                            $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
+                                "> : Set backorders from " . $currentBackorders . " to " . $backordersValue;
+                            $this->addMessageAndLog($message, "success", "quantity");
+                        } else {
+                            if ($currentUseConfig === 1) {
+                                $stockUpdateData['use_config_backorders'] = 0;
+                                $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
+                                    "> : Disabled use_config_backorders while value remains " . $backordersValue;
+                                $this->addMessageAndLog($message, "success", "quantity");
+                            }
+                        }
+                    } else {
+                        $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
+                            "> : Invalid backorders value '" . $stockData['backorders'] . "'. Allowed values are 0, 1, 2";
+                        $this->addMessageAndLog($message, "error", "quantity");
+                    }
+                }
+                if ($finalQtyToSave > 0 && !$isInStock) {
                     $stockUpdateData['is_in_stock'] = 1;
                 }
-                if ($newQty <= 0 && $isInStock) {
+                if ($finalQtyToSave <= 0 && $isInStock) {
                     $stockUpdateData['is_in_stock'] = 0;
                 }
-                if ($oldQty !== $newQty) {
-                    $stockUpdateData['qty'] = $newQty;
+                if ($oldQty !== $finalQtyToSave) {
+                    $stockUpdateData['qty'] = $finalQtyToSave;
                     $stockUpdateData['old_qty'] = $oldQty;
                 }
                 if ($minCartQty && $currentMinSaleQty !== $minCartQty) {
                     $stockUpdateData['min_sale_qty'] = $minCartQty;
                 }
+                // Save stock data
                 if (!empty($stockUpdateData)) {
                     $product->setStockData($stockUpdateData);
                     $product->save();
@@ -660,7 +739,8 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                         $productId . "> : " . json_encode($stockUpdateData);
                     $this->addMessageAndLog($message, "success", "quantity");
                 } else {
-                    $message = "SKIP QTY: sku '" . $sku . "' - product id <" . $productId . "> no data was changed";
+                    $message = "SKIP QTY: sku '" . $sku . "' - product id <" .
+                        $productId . "> no data was changed";
                     $this->addMessageAndLog($message, "success", "quantity");
                 }
             }
@@ -749,11 +829,45 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 
         // import categories
         try {
-            if (!empty($productData['category_ids'])) {
-                $categoryIds = $productData['category_ids'];
-                if (is_array($categoryIds) && !empty($categoryIds)) {
-                    $this->setCategories($product, $categoryIds);
+            $categoryIds = !empty($productData['category_ids']) ? $productData['category_ids'] : [];
+            if (!is_array($categoryIds)) {
+                $categoryIds = [];
+            }
+            $currentCategoryIds = $product->getCategoryIds();
+            // Vegan category assignment
+            if (isset($productData['custom']['asign_vegan_category'])) {
+                $asignVeganCategory = (bool) $productData['custom']['asign_vegan_category'];
+                $veganCategory = !empty($productData['custom']['vegan_category'])
+                    ? (int) $productData['custom']['vegan_category']
+                    : 0;
+                if ($veganCategory > 0) {
+                    if ($asignVeganCategory === true) {
+                        if (!in_array($veganCategory, $categoryIds)) {
+                            $categoryIds[] = $veganCategory;
+                            if (!in_array($veganCategory, $currentCategoryIds)) {
+                                $message = "SET vegan category: sku: '" . $sku . "' - product id <" . $productId .
+                                    "> to category ID " . $veganCategory;
+                                $this->addMessageAndLog($message, "success", "category");
+                            }
+                        }
+                    } elseif ($asignVeganCategory === false) {
+                        $categoryIds = array_diff($categoryIds, [$veganCategory]);
+                        if (in_array($veganCategory, $currentCategoryIds)) {
+                            $this->categoryLinkRepository->deleteByIds($veganCategory, $sku);
+                            $product->setCategoryIds($categoryIds);
+                            $message = "REMOVE vegan category: sku: '" . $sku . "' - product id <" . $productId .
+                                "> from category ID " . $veganCategory;
+                            $this->addMessageAndLog($message, "success", "category");
+                        }
+                    }
                 }
+            }
+            // Set product categories
+            if (!empty($categoryIds)) {
+                $updateMethod = !empty($productData['custom']['category_update_method'])
+                    ? (int) $productData['custom']['category_update_method']
+                    : 1;
+                $this->setCategories($product, $categoryIds, $updateMethod);
             }
         } catch (\Exception $e) {
             $message = "ERROR category: sku '" . $sku . "' - product id <" .
@@ -1024,18 +1138,20 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     }
 
     /**
-     * Set Categories for Product
+     * Set categories for product, allowing selection of update method
      *
      * @param \Magento\Catalog\Model\Product $product
      * @param array $categoryIds
+     * @param int $updateMethod
      * @return void
      */
     public function setCategories(
         \Magento\Catalog\Model\Product $product,
-        array $categoryIds
+        array $categoryIds,
+        int $updateMethod = 1
     ): void {
-        $categoryIds = array_unique($categoryIds);
         $categoryIds = array_map('intval', $categoryIds);
+        $categoryIds = array_filter(array_unique($categoryIds));
         sort($categoryIds);
 
         $oldCategoryIds = $product->getCategoryIds();
@@ -1043,17 +1159,76 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         sort($oldCategoryIds);
 
         if ($oldCategoryIds !== $categoryIds) {
-            /*$this->categoryLinkManagementInterface->assignProductToCategories(
-                $product->getSku(),
-                $categoryIds
-            );*/
-            $product->setCategoryIds($categoryIds);
-            $product->save();
-            $message = "SET category sku '" . $product->getSku() . "' - product id <" .
-                $product->getId() . "> : [" . implode(",", $categoryIds) . "] old [" .
-                implode(",", $oldCategoryIds) . "]";
-            $this->results["response"]["category"]["success"][] = $message;
-            $this->log($message);
+            $updateMethod = (int) $updateMethod;
+            $methodUsed = '';
+            switch ($updateMethod) {
+                case 1:
+                    $product->setCategoryIds($categoryIds);
+                    $product->save();
+                    $methodUsed = 'Model Save (1)';
+                    break;
+                case 2:
+                    $this->categoryLinkManagementInterface->assignProductToCategories(
+                        $product->getSku(),
+                        $categoryIds
+                    );
+                    $product->setCategoryIds($categoryIds);
+                    $methodUsed = 'API Assign (2)';
+                    break;
+                case 3:
+                    $this->updateCategories((int) $product->getId(), $oldCategoryIds, $categoryIds);
+                    $product->setCategoryIds($categoryIds);
+                    $methodUsed = 'Direct DB (3)';
+                    break;
+                default:
+                    $product->setCategoryIds($categoryIds);
+                    $product->save();
+                    $methodUsed = 'Model Save (Default)';
+                    break;
+            }
+            $message = "SET category: sku '" . $product->getSku() . "' - product id <" .
+                $product->getId() . "> - New IDs: [" . implode(",", $categoryIds) . "] - Old IDs: [" .
+                implode(",", $oldCategoryIds) . "] - Method: " . $methodUsed;
+            $this->addMessageAndLog($message, "success", "category");
+        }
+    }
+
+    /**
+     * Updates and synchronizes product categories
+     *
+     * @param int $productId
+     * @param array $oldCategoryIds
+     * @param array $categoryIds
+     * @return void
+     */
+    public function updateCategories(
+        int $productId,
+        array $oldCategoryIds,
+        array $categoryIds
+    ): void {
+        $dbw = $this->resourceConnection->getConnection('core_write');
+        $productCategoryTable = $this->resourceConnection->getTableName('catalog_category_product');
+        $insert = array_diff($categoryIds, $oldCategoryIds);
+        $delete = array_diff($oldCategoryIds, $categoryIds);
+        if (!empty($insert)) {
+            $data = array();
+            foreach ($insert as $categoryId) {
+                $data[] = [
+                    'category_id' => (int) $categoryId,
+                    'product_id' => $productId,
+                    'position' => 1
+                ];
+            }
+            if ($data) {
+                $dbw->insertMultiple($productCategoryTable, $data);
+            }
+        }
+        if (!empty($delete)) {
+            $where = [
+                'product_id = ?'  => $productId,
+                'category_id IN (?)' => $delete
+            ];
+            $dbw->delete($productCategoryTable, $where);
         }
     }
 
@@ -1294,7 +1469,19 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function getVisibility(string $visibility): int
     {
-        return match ($visibility) {
+        $trimmedVisibility = trim($visibility);
+        if (is_numeric($trimmedVisibility)) {
+            $id = (int) $trimmedVisibility;
+            if (in_array($id, [
+                self::VISIBILITY_NOT_VISIBLE,
+                self::VISIBILITY_IN_CATALOG,
+                self::VISIBILITY_IN_SEARCH,
+                self::VISIBILITY_CATALOG_SEARCH
+            ])) {
+                return $id;
+            }
+        }
+        return match ($trimmedVisibility) {
             'Catalog, Search' => self::VISIBILITY_CATALOG_SEARCH,
             'Search' => self::VISIBILITY_IN_SEARCH,
             'Catalog' => self::VISIBILITY_IN_CATALOG,
