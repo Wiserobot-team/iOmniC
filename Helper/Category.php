@@ -16,33 +16,55 @@ declare(strict_types=1);
 namespace WiseRobot\Io\Helper;
 
 use Magento\Store\Model\StoreManagerInterface;
-use Magento\Catalog\Model\CategoryFactory;
+use Magento\Catalog\Api\Data\CategoryInterfaceFactory;
+use Magento\Catalog\Api\CategoryRepositoryInterface;
+use Magento\Catalog\Model\ResourceModel\Category\CollectionFactory;
+use Magento\Framework\Exception\NoSuchEntityException;
+use WiseRobot\Io\Model\ProductManagement;
 
 class Category extends \Magento\Framework\App\Helper\AbstractHelper
 {
-    /**
-     * @var mixed
-     */
-    public mixed $logModel = null;
     /**
      * @var StoreManagerInterface
      */
     public $storeManager;
     /**
-     * @var CategoryFactory
+     * @var CategoryInterfaceFactory
      */
     public $categoryFactory;
+    /**
+     * @var CategoryRepositoryInterface
+     */
+    public $categoryRepository;
+    /**
+     * @var CollectionFactory
+     */
+    public $categoryCollectionFactory;
+    /**
+     * @var ProductManagement|null
+     */
+    public ?ProductManagement $productManagement = null;
+    /**
+     * @var array
+     */
+    public array $categoryCache = [];
 
     /**
      * @param StoreManagerInterface $storeManager
-     * @param CategoryFactory $categoryFactory
+     * @param CategoryInterfaceFactory $categoryFactory
+     * @param CategoryRepositoryInterface $categoryRepository
+     * @param CollectionFactory $categoryCollectionFactory
      */
     public function __construct(
         StoreManagerInterface $storeManager,
-        CategoryFactory $categoryFactory
+        CategoryInterfaceFactory $categoryFactory,
+        CategoryRepositoryInterface $categoryRepository,
+        CollectionFactory $categoryCollectionFactory
     ) {
         $this->storeManager = $storeManager;
         $this->categoryFactory = $categoryFactory;
+        $this->categoryRepository = $categoryRepository;
+        $this->categoryCollectionFactory = $categoryCollectionFactory;
     }
 
     /**
@@ -50,27 +72,25 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      *
      * @param string $tree
      * @param int $storeId
-     * @param bool $allowCreateCat
+     * @param bool $allowCreate
      * @return array
      */
     public function processCategoryTree(
         string $tree,
         int $storeId,
-        bool $allowCreateCat
+        bool $allowCreate
     ): array {
-        // paths are split by :: or :
-        $paths = preg_split("/(::|:|,)/", $tree);
+        // paths are split by :: or : or ,
+        $paths = preg_split("/::|:|,\s*/", $tree, -1, PREG_SPLIT_NO_EMPTY);
         $result = [];
         foreach ($paths as $path) {
-            $path = trim((string) $path);
+            $path = trim($path);
             if (!$path) {
                 continue;
             }
-            $result[] = $this->processCategoryPath($path, $storeId, $allowCreateCat);
+            $result = array_merge($result, $this->processCategoryPath($path, $storeId, $allowCreate));
         }
-        $result = array_merge([], ...$result);
-
-        return $result;
+        return array_unique($result);
     }
 
     /**
@@ -87,26 +107,36 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
         bool $allowCreate = false
     ): array {
         // name is split by / or > or \
-        $categoryLevels = preg_split("/(\/|>|\\\)/", (string) $path);
-        $store = $this->storeManager->getStore()->load($storeId);
-        $rootCatId = $store->getRootCategoryId();
-        $rootCat = $this->categoryFactory->create()->load($rootCatId);
-        $parentId = $rootCatId;
+        $categoryLevels = preg_split("/\/|>|\\\\/", $path, -1, PREG_SPLIT_NO_EMPTY);
+        try {
+            $rootCatId = $this->storeManager->getStore($storeId)->getRootCategoryId();
+            $rootCat = $this->categoryRepository->get($rootCatId, $storeId);
+            $rootCatName = $rootCat->getName();
+        } catch (NoSuchEntityException $e) {
+            $message = "ERROR category: Cannot load store/root category for store ID " .
+                $storeId . ": " . $e->getMessage();
+            $this->handleResult($message, 'error');
+            return [];
+        } catch (\Exception $e) {
+            $message = "ERROR category: Unhandled exception when loading root category for store ID " .
+                $storeId . ": " . $e->getMessage();
+            $this->handleResult($message, 'error');
+            return [];
+        }
+        $parentId = (int) $rootCatId;
         $resultCatIds = [];
         foreach ($categoryLevels as $levelName) {
-            $levelName  = trim((string) $levelName);
-            if (!$levelName || in_array($levelName, [$rootCat->getName()])) {
+            $levelName = trim($levelName);
+            if (!$levelName || $levelName === $rootCatName) {
                 continue;
             }
             $newLevelId = $this->createOrSearchCategory($levelName, (int) $parentId, $allowCreate);
             if (!$newLevelId) {
                 break;
-            } else {
-                $resultCatIds[] = $newLevelId;
             }
+            $resultCatIds[] = $newLevelId;
             $parentId = $newLevelId;
         }
-
         return $resultCatIds;
     }
 
@@ -116,41 +146,45 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $nameToCreate
      * @param int $parentId
      * @param bool $allowCreate
-     * @return mixed
+     * @return int|false
      */
     public function createOrSearchCategory(
         string $nameToCreate,
         int $parentId,
         bool $allowCreate = false
-    ): mixed {
+    ): int|false {
+        $cacheKey = $parentId . '_' . strtolower($nameToCreate);
+        if (isset($this->categoryCache[$cacheKey])) {
+            return $this->categoryCache[$cacheKey];
+        }
         $existingId = $this->searchCategoryId($nameToCreate, $parentId);
-        if (!$existingId && $allowCreate) {
-            $newCategory = $this->categoryFactory->create();
-            $newCategory->setName($nameToCreate);
-            $newCategory->setIsActive(1);
-            $newCategory->setStoreId(0);
-            $newCategory->setIsAnchor(1);
-            $newCategory->setParentId($parentId);
-            $parentCategory = $this->categoryFactory->create()->load($parentId);
-            $newCategory->setPath($parentCategory->getPath());
-            try {
-                $newCategory->save();
-                $message = "Created new category " . $parentCategory->getName() . " > " . $nameToCreate;
-                $this->logModel->results["response"]["category"]["success"][] = $message;
-                $this->log($message);
-                $this->logModel->cleanResponseMessages();
-                return $newCategory->getId();
-            } catch (\Exception $e) {
-                $catName = $parentCategory->getName();
-                $message = "Created category " . $catName . " > " . $nameToCreate . ": " . $e->getMessage();
-                $this->logModel->results["response"]["category"]["error"][] = $message;
-                $this->log("ERROR " . $message);
-                $this->logModel->cleanResponseMessages();
-                return false;
-            }
-        } else {
+        if ($existingId) {
+            $this->categoryCache[$cacheKey] = $existingId;
             return $existingId;
         }
+        if ($allowCreate) {
+            try {
+                $parentCategory = $this->categoryRepository->get($parentId);
+                $newCategory = $this->categoryFactory->create();
+                $newCategory->setName($nameToCreate);
+                $newCategory->setParentId($parentId);
+                $newCategory->setIsActive(true);
+                $newCategory->setStoreId(0);
+                $newCategory->setIsAnchor(true);
+                $savedCategory = $this->categoryRepository->save($newCategory);
+                $newId = (int) $savedCategory->getId();
+                $message = "Created new category " . $parentCategory->getName() . " > " . $nameToCreate;
+                $this->handleResult($message, 'success');
+                $this->categoryCache[$cacheKey] = $newId;
+                return $newId;
+            } catch (\Exception $e) {
+                $message = "Failed to create category " . $parentCategory->getName() . " > " .
+                    $nameToCreate . ": " . $e->getMessage();
+                $this->handleResult($message, 'error');
+                return false;
+            }
+        }
+        return false;
     }
 
     /**
@@ -158,37 +192,50 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
      *
      * @param string $categoryName
      * @param int $parentId
-     * @return mixed
+     * @return int|false
      */
     public function searchCategoryId(
         string $categoryName,
         int $parentId
-    ): mixed {
-        $foundId = false;
-        $collection = $this->categoryFactory->create()
-            ->getCollection()
+    ): int|false {
+        $collection = $this->categoryCollectionFactory->create()
+            ->addAttributeToSelect('entity_id')
             ->addFieldToFilter("name", $categoryName);
         if ($parentId) {
             $collection->addFieldToFilter("parent_id", $parentId);
         }
-        $foundIds = $collection->getAllIds();
-        if (count($foundIds)) {
-            $foundId = array_shift($foundIds);
-        }
-
-        return $foundId;
+        $collection->setPageSize(1)->setCurPage(1);
+        $item = $collection->getFirstItem();
+        $foundId = (int) $item->getId();
+        return $foundId > 0 ? $foundId : false;
     }
 
     /**
-     * Log message
+     * Handles logging and saving the result to ProductManagement
+     *
+     * @param string $message
+     * @param string $type
+     * @return void
+     */
+    public function handleResult(string $message, string $type): void
+    {
+        if ($this->productManagement !== null) {
+            $this->productManagement->results["response"]["category"][$type][] = $message;
+            $this->productManagement->cleanResponseMessages();
+        }
+        $this->log($message);
+    }
+
+    /**
+     * Logs a message
      *
      * @param string $message
      * @return void
      */
     public function log(string $message): void
     {
-        if ($this->logModel !== null) {
-            $this->logModel->log($message);
+        if ($this->productManagement !== null) {
+            $this->productManagement->log($message);
         }
     }
 }

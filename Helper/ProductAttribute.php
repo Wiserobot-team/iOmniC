@@ -15,24 +15,16 @@ declare(strict_types=1);
 
 namespace WiseRobot\Io\Helper;
 
+use Magento\Catalog\Api\Data\ProductAttributeInterface;
 use Magento\Catalog\Api\ProductAttributeRepositoryInterface;
+use Magento\Catalog\Model\Product;
 use Magento\Eav\Api\AttributeOptionManagementInterface;
 use Magento\Eav\Api\Data\AttributeOptionInterfaceFactory;
-use Magento\Eav\Api\Data\AttributeOptionLabelInterfaceFactory;
 use Magento\Eav\Model\Entity\Attribute\Source\TableFactory;
-use Magento\Swatches\Helper\Data as SwatchesHelper;
-use Magento\Swatches\Model\ResourceModel\Swatch\CollectionFactory as SwatchCollectionFactory;
+use WiseRobot\Io\Model\ProductManagement;
 
 class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
 {
-    /**
-     * @var array
-     */
-    public array $attributes = [];
-    /**
-     * @var mixed
-     */
-    public mixed $productAttribute = [];
     /**
      * @var ProductAttributeRepositoryInterface
      */
@@ -46,100 +38,119 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      */
     public $attributeOptionFactory;
     /**
-     * @var AttributeOptionLabelInterfaceFactory
-     */
-    public $attributeOptionLabelFactory;
-    /**
      * @var TableFactory
      */
     public $attributeSourceTableFactory;
     /**
-     * @var SwatchesHelper
+     * @var ProductManagement|null
      */
-    public $swatchesHelper;
+    public ?ProductManagement $productManagement = null;
     /**
-     * @var SwatchCollectionFactory
+     * @var array
      */
-    public $swatchCollectionFactory;
+    public array $attributes = [];
 
     /**
      * @param ProductAttributeRepositoryInterface $attributeRepository
      * @param AttributeOptionManagementInterface $attributeOptionManagement
      * @param AttributeOptionInterfaceFactory $attributeOptionFactory
-     * @param AttributeOptionLabelInterfaceFactory $attributeOptionLabelFactory
      * @param TableFactory $attributeSourceTableFactory
-     * @param SwatchesHelper $swatchesHelper
-     * @param SwatchCollectionFactory $swatchCollectionFactory
      */
     public function __construct(
         ProductAttributeRepositoryInterface $attributeRepository,
         AttributeOptionManagementInterface $attributeOptionManagement,
         AttributeOptionInterfaceFactory $attributeOptionFactory,
-        AttributeOptionLabelInterfaceFactory $attributeOptionLabelFactory,
-        TableFactory $attributeSourceTableFactory,
-        SwatchesHelper $swatchesHelper,
-        SwatchCollectionFactory $swatchCollectionFactory
+        TableFactory $attributeSourceTableFactory
     ) {
         $this->attributeRepository = $attributeRepository;
         $this->attributeOptionManagement = $attributeOptionManagement;
         $this->attributeOptionFactory = $attributeOptionFactory;
-        $this->attributeOptionLabelFactory = $attributeOptionLabelFactory;
         $this->attributeSourceTableFactory = $attributeSourceTableFactory;
-        $this->swatchesHelper = $swatchesHelper;
-        $this->swatchCollectionFactory = $swatchCollectionFactory;
     }
 
     /**
-     * Get attribute option value
+     * Get or create attribute option value
      *
      * @param string $attributeCode
      * @param string $optionLabel
-     * @return mixed
+     * @return string|int|null
      */
-    public function getAttributeOptionValue(string $attributeCode, string $optionLabel): mixed
-    {
-        $optionLabel = trim((string) $optionLabel);
+    public function getAttributeOptionValue(
+        string $attributeCode,
+        string $optionLabel
+    ): string|int|null {
+        $optionLabel = trim($optionLabel);
         if (!$optionLabel) {
-            return false;
+            $this->log("Empty option label provided for attribute '{$attributeCode}'");
+            return null;
         }
         $attribute = $this->getAttribute($attributeCode);
         if (!$attribute) {
-            return false;
+            $this->log("Attribute '{$attributeCode}' does not exist");
+            return null;
         }
-        if ($attribute->getData("frontend_input") != "select") {
-            return false;
+        $frontendInput = $attribute->getFrontendInput();
+        if (!in_array($frontendInput, ['select', 'multiselect'])) {
+            $message = "Attribute '{$attributeCode}' has frontend input '{$frontendInput}' . " .
+                " which is not a selectable option type";
+            $this->log($message);
+            return null;
         }
+        $this->getAttributeData($attributeCode);
         if (isset($this->attributes[$attributeCode]['labels'][$optionLabel])) {
             return $this->attributes[$attributeCode]['labels'][$optionLabel];
-        } else {
-            $attribute = $this->attributes[$attributeCode]['attribute'];
-            $option = $this->attributeOptionFactory->create();
-            $option->setLabel($optionLabel);
-            $option->setSortOrder(0);
-            $option->setIsDefault(false);
-
-            $this->attributeOptionManagement->add(
-                \Magento\Catalog\Model\Product::ENTITY,
-                $attribute->getAttributeCode(),
-                $option
-            );
-
-            // force reload attribute
-            unset($this->attributes[$attributeCode]);
-            $this->getAttributeData($attributeCode);
-            if (isset($this->attributes[$attributeCode]['labels'][$optionLabel])) {
-                $optionId = $this->attributes[$attributeCode]['labels'][$optionLabel];
-                $message  = "Add option '" . $optionLabel . "' to '" .
-                    $attributeCode . "' as value id: " . $optionId;
-                $this->productAttribute->results["response"]["data"]["success"][] = $message;
-                $this->log($message);
-                $this->productAttribute->cleanResponseMessages();
-                $this->addAttributeOptionSwatch($attribute, $optionId);
-
-                return $this->attributes[$attributeCode]['labels'][$optionLabel];
-            }
         }
-        return false;
+        try {
+            $newOptionId = $this->createAttributeOption($attribute, $optionLabel);
+            if ($newOptionId) {
+                $message  = "Add option '{$optionLabel}' to '{$attributeCode}' as value id: {$newOptionId}";
+                $this->handleResult($message, 'success');
+                return $newOptionId;
+            }
+        } catch (\Exception $e) {
+            $this->log("Failed to create option '{$optionLabel}' for attribute '{$attributeCode}': "
+                . $e->getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Creates a new option for a select attribute
+     *
+     * @param ProductAttributeInterface $attribute
+     * @param string $optionLabel
+     * @return string|int|null
+     */
+    public function createAttributeOption(
+        ProductAttributeInterface $attribute,
+        string $optionLabel
+    ): string|int|null {
+        $option = $this->attributeOptionFactory->create();
+        $option->setLabel($optionLabel);
+        $option->setSortOrder(0);
+        $option->setIsDefault(false);
+        $this->attributeOptionManagement->add(
+            Product::ENTITY,
+            $attribute->getAttributeCode(),
+            $option
+        );
+        $this->reloadAttributeData($attribute->getAttributeCode());
+        if (isset($this->attributes[$attribute->getAttributeCode()]['labels'][$optionLabel])) {
+            return $this->attributes[$attribute->getAttributeCode()]['labels'][$optionLabel];
+        }
+        return null;
+    }
+
+    /**
+     * Force reload attribute data
+     *
+     * @param string $attributeCode
+     * @return void
+     */
+    public function reloadAttributeData(string $attributeCode): void
+    {
+        unset($this->attributes[$attributeCode]);
+        $this->getAttributeData($attributeCode);
     }
 
     /**
@@ -152,22 +163,29 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
     {
         if (!isset($this->attributes[$attributeCode])) {
             $this->attributes[$attributeCode] = [];
-
-            $attribute = $this->attributeRepository->get($attributeCode);
-            $this->attributes[$attributeCode]['attribute'] = $attribute;
+            try {
+                $attribute = $this->attributeRepository->get($attributeCode);
+                $this->attributes[$attributeCode]['attribute'] = $attribute;
+            } catch (\Exception $e) {
+                return;
+            }
         }
-
-        if (!isset($this->attributes[$attributeCode]['labels'])) {
+        if (!isset($this->attributes[$attributeCode]['labels']) && isset($this->attributes[$attributeCode]['attribute'])) {
+            $attribute = $this->attributes[$attributeCode]['attribute'];
             $this->attributes[$attributeCode]['values'] = [];
             $this->attributes[$attributeCode]['labels'] = [];
-            $sourceModel = $this->attributeSourceTableFactory->create();
-            $sourceModel->setAttribute($this->attributes[$attributeCode]['attribute']);
-            $options = $sourceModel->getAllOptions(false);
-            foreach ($options as $option) {
-                $label = trim((string) $option['label']);
-                $value = $option['value'];
-                $this->attributes[$attributeCode]['values'][$value] = $label;
-                $this->attributes[$attributeCode]['labels'][$label] = $value;
+            if ($attribute->getFrontendInput() === 'select' || $attribute->getFrontendInput() === 'multiselect') {
+                $sourceModel = $this->attributeSourceTableFactory->create();
+                $sourceModel->setAttribute($attribute);
+                $options = $sourceModel->getAllOptions(false);
+                foreach ($options as $option) {
+                    $label = trim((string) $option['label']);
+                    $value = $option['value'];
+                    if (!empty($value)) {
+                        $this->attributes[$attributeCode]['values'][(string) $value] = $label;
+                        $this->attributes[$attributeCode]['labels'][$label] = (string) $value;
+                    }
+                }
             }
         }
     }
@@ -176,95 +194,41 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
      * Get attribute by attribute code
      *
      * @param string $attributeCode
-     * @return mixed
+     * @return ProductAttributeInterface|null
      */
-    public function getAttribute(string $attributeCode): mixed
+    public function getAttribute(string $attributeCode): ?ProductAttributeInterface
     {
         $this->getAttributeData($attributeCode);
-        if (isset($this->attributes[$attributeCode]['attribute'])) {
-            $attribute = $this->attributes[$attributeCode]['attribute'];
-        } else {
-            $attribute = false;
-        }
-        return $attribute;
+        $attribute = $this->attributes[$attributeCode]['attribute'] ?? null;
+        return ($attribute instanceof ProductAttributeInterface) ? $attribute : null;
     }
 
     /**
-     * Add swatch attribute option
+     * Handles logging and saving the result to ProductManagement
      *
-     * @param mixed $attribute
-     * @param mixed $optionId
+     * @param string $message
+     * @param string $type
      * @return void
      */
-    public function addAttributeOptionSwatch(mixed $attribute, mixed $optionId): void
+    public function handleResult(string $message, string $type): void
     {
-        // check if attribute is swatch visual
-        $isSwatch = $this->swatchesHelper->isSwatchAttribute($attribute);
-        if ($isSwatch) {
-            $swatch = $this->loadSwatchIfExists($optionId);
-            if (!$swatch->getId()) {
-                $this->saveSwatchData($optionId);
-            }
+        if ($this->productManagement !== null) {
+            $this->productManagement->results["response"]["data"][$type][] = $message;
+            $this->productManagement->cleanResponseMessages();
         }
+        $this->log($message);
     }
 
     /**
-     * Load swatch attribute option
-     *
-     * @param mixed $optionId
-     * @param int $storeId
-     * @return mixed
-     */
-    public function loadSwatchIfExists(mixed $optionId, int $storeId = 0): mixed
-    {
-        $collection = $this->swatchCollectionFactory->create();
-        $collection->addFieldToFilter('option_id', $optionId);
-        $collection->addFieldToFilter('store_id', $storeId);
-        $collection->setPageSize(1);
-        $loadedSwatch = $collection->getFirstItem();
-
-        return $loadedSwatch;
-    }
-
-    /**
-     * Save swatch attribute option
-     *
-     * @param mixed $optionId
-     * @param int $storeId
-     * @param int $type
-     * @param string $value
-     * @return void
-     */
-    public function saveSwatchData(
-        mixed $optionId,
-        int $storeId = 0,
-        int $type = 3,
-        string $value = ''
-    ): void {
-        $swatch = $this->loadSwatchIfExists($optionId, 0);
-        if (!$swatch->getId()) {
-            $swatch->setData('option_id', $optionId);
-            $swatch->setData('store_id', $storeId);
-            $swatch->setData('type', $type);
-            $swatch->setData('value', $value);
-            try {
-                $swatch->save();
-            } catch (\Exception $error) {
-                $this->log($error->getMessage());
-            }
-        }
-    }
-
-    /**
-     * Log message
+     * Logs a message
      *
      * @param string $message
      * @return void
      */
     public function log(string $message): void
     {
-        if ($this->productAttribute) {
-            $this->productAttribute->log($message);
+        if ($this->productManagement !== null) {
+            $this->productManagement->log($message);
         }
     }
 }

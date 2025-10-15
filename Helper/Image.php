@@ -19,6 +19,7 @@ use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\Filesystem\Driver\File as DriverFile;
 use Magento\Catalog\Model\ProductFactory;
+use WiseRobot\Io\Model\ProductManagement;
 
 class Image extends \Magento\Framework\App\Helper\AbstractHelper
 {
@@ -34,6 +35,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @var ProductFactory
      */
     public $productFactory;
+    /**
+     * @var ProductManagement|null
+     */
+    public ?ProductManagement $productManagement = null;
 
     /**
      * @param Filesystem $filesystem
@@ -55,19 +60,19 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      *
      * @param \Magento\Catalog\Model\Product $product
      * @param array $imagePlacementsToSet
-     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
+     * @param string $ioImagesField
      * @return int
      */
     public function populateProductImage(
         \Magento\Catalog\Model\Product $product,
         array $imagePlacementsToSet,
-        \WiseRobot\Io\Model\ProductManagement $productManagement
+        string $ioImagesField = 'io_images'
     ): int {
         $totalImagesChanges = 0;
         if (!$product || !$product->getId()) {
             return $totalImagesChanges;
         }
-        $oldImagesString = (string) $product->getData('io_images');
+        $oldImagesString = (string) $product->getData($ioImagesField);
         $oldImagePlacements = $this->parseOldImageUrls($oldImagesString);
         $placementKeys = array_keys($imagePlacementsToSet);
         usort($placementKeys, function($a, $b) {
@@ -84,7 +89,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 $shouldRemoveOldImage = false;
             }
             if ($shouldRemoveOldImage) {
-                $this->removeImage($product, $imgPos, $productManagement);
+                $this->removeImage($product, $imgPos);
                 $totalImagesChanges++;
             }
             if (!empty($imageUrl) && $shouldRemoveOldImage) {
@@ -92,8 +97,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                     $product,
                     $imageUrl,
                     $isMainImage,
-                    $imgPos,
-                    $productManagement
+                    $imgPos
                 );
                 if ($addedImageCount) {
                     $totalImagesChanges += $addedImageCount;
@@ -108,7 +112,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         }, array_keys($imagePlacementsToSet));
         foreach ($oldImagePlacements as $pos => $url) {
             if (!in_array($pos, $newImgPositions)) {
-                $this->removeImage($product, $pos, $productManagement);
+                $this->removeImage($product, $pos);
                 $totalImagesChanges++;
             }
         }
@@ -149,15 +153,13 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * @param string $imageUrl
      * @param bool $isMainImage
      * @param int $position
-     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
      * @return int
      */
     public function addImageToProductGallery(
         \Magento\Catalog\Model\Product &$product,
         string $imageUrl,
         bool $isMainImage,
-        int $position,
-        \WiseRobot\Io\Model\ProductManagement $productManagement
+        int $position
     ): int {
         $dir = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
             ->getAbsolutePath('io');
@@ -189,14 +191,12 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                 }
                 $message = "Added image '" . $imageUrl . "' at position " . $position . " to '" .
                     $product->getSku() . "' - product id <" . $product->getId() . ">";
-                $productManagement->results["response"]["image"]["success"][] = $message;
-                $productManagement->log($message);
+                $this->handleResult($message, 'success');
                 return 1;
             } else {
                 $message = "WARN get image '" . $imageUrl . "' failed" . " for '" .
                     $product->getSku() . "' - product id <" . $product->getId() . ">";
-                $productManagement->results["response"]["image"]["error"][] = $message;
-                $productManagement->log($message);
+                $this->handleResult($message, 'error');
                 if ($this->driverFile->isExists($path)) {
                     $this->driverFile->deleteFile($path);
                 }
@@ -204,8 +204,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         } catch (\Exception $e) {
             $message = "WARN get image '" . $imageUrl . "' failed for '" .
                 $product->getSku() . "' - product id <" . $product->getId() . "> : " . $e->getMessage();
-            $productManagement->results["response"]["image"]["error"][] = $message;
-            $productManagement->log($message);
+            $this->handleResult($message, 'error');
             if ($this->driverFile->isExists($path)) {
                 $this->driverFile->deleteFile($path);
             }
@@ -218,13 +217,11 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      *
      * @param \Magento\Catalog\Model\Product $product
      * @param int $position
-     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
      * @return void
      */
     public function removeImage(
         \Magento\Catalog\Model\Product &$product,
-        int $position,
-        \WiseRobot\Io\Model\ProductManagement $productManagement
+        int $position
     ): void {
         try {
             $gallery = $product->getData("media_gallery");
@@ -233,13 +230,12 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
                     if (isset($image["position"]) && (int) $image["position"] === $position && empty($image["removed"])) {
                         $image["removed"] = 1;
                         if (!empty($image["file"])) {
-                            $this->deleteProductImage($image["file"], $productManagement);
+                            $this->deleteProductImage($image["file"]);
                         }
                         $nameImage = basename((string) $image["file"]);
                         $message = "Deleted image '" . $nameImage . "' at position " . $position . " for '" .
                             $product->getSku() . "' - product id <" . $product->getId() . ">";
-                        $productManagement->results["response"]["image"]["success"][] = $message;
-                        $productManagement->log($message);
+                        $this->handleResult($message, 'success');
                         $product->setData("media_gallery", $gallery);
                         break;
                     }
@@ -248,8 +244,7 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         } catch (\Exception $e) {
             $message = "ERROR: sku '" . $product->getSku() . "' - product id <" .
                 $product->getId() . "> remove image: " .  $e->getMessage();
-            $productManagement->results["response"]["image"]["error"][] = $message;
-            $productManagement->log($message);
+            $this->handleResult($message, 'error');
         }
     }
 
@@ -257,12 +252,10 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
      * Delete product image file from the file system
      *
      * @param string $path
-     * @param \WiseRobot\Io\Model\ProductManagement $productManagement
      * @return void
      */
     public function deleteProductImage(
-        string $path,
-        \WiseRobot\Io\Model\ProductManagement $productManagement
+        string $path
     ): void {
         $imagePath = 'catalog/product/' . trim((string) $path, ' /');
         $filePath = $this->filesystem->getDirectoryWrite(DirectoryList::MEDIA)
@@ -270,10 +263,40 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         if ($this->driverFile->isExists($filePath)) {
             try {
                 $this->driverFile->deleteFile($filePath);
-            } catch (\Exception $error) {
-                $message = 'Error while deleting product image file: ' . $error->getMessage();
-                $productManagement->log($message);
+            } catch (\Exception $e) {
+                $message = 'Error while deleting product image file ' . $filePath . ': ' .
+                    $e->getMessage();
+                $this->log($message);
             }
+        }
+    }
+
+    /**
+     * Handles logging and saving the result to ProductManagement
+     *
+     * @param string $message
+     * @param string $type
+     * @return void
+     */
+    public function handleResult(string $message, string $type): void
+    {
+        if ($this->productManagement !== null) {
+            $this->productManagement->results["response"]["image"][$type][] = $message;
+            $this->productManagement->cleanResponseMessages();
+        }
+        $this->log($message);
+    }
+
+    /**
+     * Logs a message
+     *
+     * @param string $message
+     * @return void
+     */
+    public function log(string $message): void
+    {
+        if ($this->productManagement !== null) {
+            $this->productManagement->log($message);
         }
     }
 }

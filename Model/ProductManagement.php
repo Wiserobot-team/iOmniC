@@ -23,6 +23,7 @@ use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as Config
 use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
 use Magento\Tax\Model\ClassModelFactory;
 use Magento\Catalog\Api\Data\ProductLinkInterfaceFactory;
+use Magento\Catalog\Api\Data\ProductAttributeInterface;
 use Magento\Catalog\Model\Product\Attribute\Repository as AttributeRepository;
 use Magento\Catalog\Api\CategoryLinkManagementInterface;
 use Magento\Catalog\Model\CategoryLinkRepository;
@@ -53,47 +54,6 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @var Zend_Log
      */
     public $logger;
-    /**
-     * @var string
-     */
-    public string $logFile = "wr_io_product_import.log";
-    /**
-     * @var bool
-     */
-    public bool $isNewProduct = false;
-    /**
-     * @var array
-     */
-    public array $results = [];
-    /**
-     * @var array
-     */
-    public array $attributeSetCache = [];
-    /**
-     * @var array
-     */
-    public array $taxClassCache = [];
-    /**
-     * @var array
-     */
-    public array $attributeCodesInSetCache = [];
-    /**
-     * @var array
-     */
-    public array $newProductDefaults = [];
-    /**
-     * Define Constants
-     */
-    public const PRODUCT_TYPE_SIMPLE = 'simple';
-    public const PRODUCT_TYPE_CONFIGURABLE = 'configurable';
-    public const PRODUCT_TYPE_GROUPED = 'grouped';
-    public const STATUS_ENABLED = 1;
-    public const STATUS_DISABLED = 2;
-    public const TAX_CLASS_NONE = 0;
-    public const VISIBILITY_NOT_VISIBLE = 1;
-    public const VISIBILITY_IN_CATALOG = 2;
-    public const VISIBILITY_IN_SEARCH = 3;
-    public const VISIBILITY_CATALOG_SEARCH = 4;
     /**
      * @var ScopeConfigInterface
      */
@@ -210,6 +170,55 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @var ImageHelper
      */
     public $imageHelper;
+    /**
+     * @var string
+     */
+    public string $logFile = 'wr_io_product_import.log';
+    /**
+     * @var bool
+     */
+    public bool $isNewProduct = false;
+    /**
+     * @var array
+     */
+    public array $results = [];
+    /**
+     * @var array
+     */
+    public array $attributeSetCache = [];
+    /**
+     * @var array
+     */
+    public array $taxClassCache = [];
+    /**
+     * @var array
+     */
+    public array $attributeCodesInSetCache = [];
+    /**
+     * @var array
+     */
+    public array $newProductDefaults = [];
+    /**
+     * @var string
+     */
+    public string $ioImagesField = 'io_images';
+    /**
+     * @var bool
+     */
+    public bool $allowCreateCategory = false;
+    /**
+     * Define Constants
+     */
+    public const PRODUCT_TYPE_SIMPLE = 'simple';
+    public const PRODUCT_TYPE_CONFIGURABLE = 'configurable';
+    public const PRODUCT_TYPE_GROUPED = 'grouped';
+    public const STATUS_ENABLED = 1;
+    public const STATUS_DISABLED = 2;
+    public const TAX_CLASS_NONE = 0;
+    public const VISIBILITY_NOT_VISIBLE = 1;
+    public const VISIBILITY_IN_CATALOG = 2;
+    public const VISIBILITY_IN_SEARCH = 3;
+    public const VISIBILITY_CATALOG_SEARCH = 4;
 
     /**
      * @param ScopeConfigInterface $scopeConfig
@@ -298,10 +307,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->attributeSetCollectionFactory = $attributeSetCollectionFactory;
         $this->taxClassCollectionFactory = $taxClassCollectionFactory;
         $this->productAttributeHelper = $productAttributeHelper;
-        $this->productAttributeHelper->productAttribute = $this;
+        $this->productAttributeHelper->productManagement = $this;
         $this->categoryHelper = $categoryHelper;
-        $this->categoryHelper->logModel = $this;
+        $this->categoryHelper->productManagement = $this;
         $this->imageHelper = $imageHelper;
+        $this->imageHelper->productManagement = $this;
         $this->preloadAttributeSets();
         $this->preloadTaxClasses();
         $this->initializeResults();
@@ -349,7 +359,13 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     ): array {
         try {
             $this->validateProductInfo($store, $attributeInfo, $variationInfo);
-            $sku = $attributeInfo["sku"];
+            $sku = $attributeInfo['sku'];
+            $this->ioImagesField = !empty($customInfo['io_images_field'])
+                ? (string) $customInfo['io_images_field']
+                : $this->ioImagesField;
+            $this->allowCreateCategory = !empty($customInfo['allow_create_category'])
+                ? (bool) $customInfo['allow_create_category']
+                : $this->allowCreateCategory;
             $product = $this->getProductToImport(
                 $store,
                 $sku,
@@ -581,18 +597,35 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     if (!in_array($attrCode, ['attribute_set_id', 'tax_class_id', 'visibility', 'status'])) {
                         // Handle select/dropdown attributes
                         $attribute = $this->getAttribute($attrCode);
-                        if ($attribute && $attribute->getData("frontend_input") == "select" &&
-                            !$attrValue = $this->getAttributeValue($attrCode, $attrValue)) {
-                            // TODO: find way to set empty value for dropdown
+                        if (!$attribute) {
                             continue;
                         }
+                        $frontendInput = $attribute->getData("frontend_input");
+                        if ($frontendInput === 'select') {
+                            if (!$attrValue = $this->getAttributeValue($attrCode, (string) $attrValue)) {
+                                continue;
+                            }
+                        } elseif ($frontendInput === 'multiselect') {
+                            if (is_string($attrValue)) {
+                                $attrValue = array_map('trim', explode(',', $attrValue));
+                            }
+                            if (!$attrValue = $this->getMultiselectAttributeValue($attrCode, (array) $attrValue)) {
+                                continue;
+                            }
+                        }
                     }
-                    if ($product->getData($attrCode) != $attrValue) {
+                    $currentValue = $product->getData($attrCode);
+                    if ($frontendInput === 'multiselect' && !empty($currentValue)) {
+                        $currentValue = explode(',', $currentValue);
+                        sort($currentValue);
+                        $currentValue = implode(',', $currentValue);
+                    }
+                    if ($currentValue != $attrValue) {
                         $product->setData($attrCode, $attrValue);
+                        $importedAttributes[$attrCode] = $attrValue;
                         /*if (!$this->isNewProduct) {
                             $this->productResource->saveAttribute($product, $attrCode);
                         }*/
-                        $importedAttributes[$attrCode] = $attrValue;
                     }
                 }
             }
@@ -642,111 +675,112 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                         'qty' => 0,
                         'is_in_stock' => 0
                     ];
-                }
-                $oldQty = (int) $stockItem->getQty();
-                $isInStock = (bool) $stockItem->getData('is_in_stock');
-                $currentMinSaleQty = (int) $stockItem->getData('min_sale_qty');
-                $minCartQty = isset($stockData['min_sale_qty']) ? (int) $stockData['min_sale_qty'] : null;
-                $newQty = (int) $stockData['qty'];
-                $finalQtyToSave = $newQty;
-                // Inventory quantity buffering
-                if (isset($stockData['buffer_qty'])) {
-                    $bufferInput = trim((string) $stockData['buffer_qty']);
-                    $operator = null;
-                    $bufferValue = 0;
-                    if (preg_match('/^([+-])(\d+)$/', $bufferInput, $matches)) {
-                        $operator = $matches[1];
-                        $bufferValue = (int) $matches[2];
-                    } elseif (is_numeric($bufferInput) && $bufferInput > 0) {
-                        $operator = '-';
-                        $bufferValue = (int) $bufferInput;
-                    }
-                    if ($bufferValue > 0 && !empty($operator)) {
-                        $oldSetQty = $finalQtyToSave;
-                        if ($operator === "-") {
-                            $finalQtyToSave = max(0, $finalQtyToSave - $bufferValue);
-                        } elseif ($operator === "+") {
-                            $finalQtyToSave = $finalQtyToSave + $bufferValue;
+                } else {
+                    $oldQty = (int) $stockItem->getQty();
+                    $isInStock = (bool) $stockItem->getData('is_in_stock');
+                    $currentMinSaleQty = (int) $stockItem->getData('min_sale_qty');
+                    $minCartQty = isset($stockData['min_sale_qty']) ? (int) $stockData['min_sale_qty'] : null;
+                    $newQty = (int) $stockData['qty'];
+                    $finalQtyToSave = $newQty;
+                    // Inventory quantity buffering
+                    if (isset($stockData['buffer_qty'])) {
+                        $bufferInput = trim((string) $stockData['buffer_qty']);
+                        $operator = null;
+                        $bufferValue = 0;
+                        if (preg_match('/^([+-])(\d+)$/', $bufferInput, $matches)) {
+                            $operator = $matches[1];
+                            $bufferValue = (int) $matches[2];
+                        } elseif (is_numeric($bufferInput) && $bufferInput > 0) {
+                            $operator = '-';
+                            $bufferValue = (int) $bufferInput;
                         }
-                        $message = "BUFFER QTY: sku: '" . $sku . "' - product id <" .
-                            $productId . "> : Buffer '" . $bufferInput . "' from " .
-                            $oldSetQty . " to " . $finalQtyToSave;
-                        $this->addMessageAndLog($message, "success", "quantity");
-                    }
-                }
-                // Stock backorder configuration
-                if (isset($stockData['backorders'])) {
-                    $backordersValue = (int) $stockData['backorders'];
-                    if (in_array($backordersValue, [0, 1, 2])) {
-                        $currentBackorders = (int) $stockItem->getData('backorders');
-                        $currentUseConfig = (int) $stockItem->getData('use_config_backorders');
-                        if ($backordersValue === 0) {
-                            $shouldUpdate = false;
-                            if ($currentBackorders !== 0) {
-                                $stockUpdateData['backorders'] = 0;
-                                $shouldUpdate = true;
+                        if ($bufferValue > 0 && !empty($operator)) {
+                            $oldSetQty = $finalQtyToSave;
+                            if ($operator === "-") {
+                                $finalQtyToSave = max(0, $finalQtyToSave - $bufferValue);
+                            } elseif ($operator === "+") {
+                                $finalQtyToSave = $finalQtyToSave + $bufferValue;
                             }
-                            if ($currentUseConfig !== 1) {
-                                $stockUpdateData['use_config_backorders'] = 1;
-                                $shouldUpdate = true;
-                            }
-                            if ($shouldUpdate) {
-                                $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
-                                    "> : Input '" . $stockData['backorders'] .
-                                    "'. Set backorders to 0 and use_config_backorders to 1";
-                                $this->addMessageAndLog($message, "success", "quantity");
-                            }
-                        } elseif ($currentBackorders !== $backordersValue) {
-                            $stockUpdateData['backorders'] = $backordersValue;
-                            if ($currentUseConfig !== 0) {
-                                $stockUpdateData['use_config_backorders'] = 0;
-                            }
-                            $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
-                                "> : Set backorders from " . $currentBackorders . " to " . $backordersValue;
+                            $message = "BUFFER QTY: sku: '{$sku}' - product id <{$productId}> : " .
+                                "Buffer '{$bufferInput}' from {$oldSetQty} to {$finalQtyToSave}";
                             $this->addMessageAndLog($message, "success", "quantity");
-                        } else {
-                            if ($currentUseConfig === 1) {
-                                $stockUpdateData['use_config_backorders'] = 0;
-                                $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
-                                    "> : Disabled use_config_backorders while value remains " . $backordersValue;
-                                $this->addMessageAndLog($message, "success", "quantity");
-                            }
                         }
-                    } else {
-                        $message = "SET BACKORDERS: sku: '" . $sku . "' - product id <" . $productId .
-                            "> : Invalid backorders value '" . $stockData['backorders'] . "'. Allowed values are 0, 1, 2";
-                        $this->addMessageAndLog($message, "error", "quantity");
                     }
-                }
-                if ($finalQtyToSave > 0 && !$isInStock) {
-                    $stockUpdateData['is_in_stock'] = 1;
-                }
-                if ($finalQtyToSave <= 0 && $isInStock) {
-                    $stockUpdateData['is_in_stock'] = 0;
-                }
-                if ($oldQty !== $finalQtyToSave) {
-                    $stockUpdateData['qty'] = $finalQtyToSave;
-                    $stockUpdateData['old_qty'] = $oldQty;
-                }
-                if ($minCartQty && $currentMinSaleQty !== $minCartQty) {
-                    $stockUpdateData['min_sale_qty'] = $minCartQty;
+                    // Stock backorder configuration
+                    if (isset($stockData['backorders'])) {
+                        $backordersValue = (int) $stockData['backorders'];
+                        if (in_array($backordersValue, [0, 1, 2])) {
+                            $currentBackorders = (int) $stockItem->getData('backorders');
+                            $currentUseConfig = (int) $stockItem->getData('use_config_backorders');
+                            if ($backordersValue === 0) {
+                                $shouldUpdate = false;
+                                if ($currentBackorders !== 0) {
+                                    $stockUpdateData['backorders'] = 0;
+                                    $shouldUpdate = true;
+                                }
+                                if ($currentUseConfig !== 1) {
+                                    $stockUpdateData['use_config_backorders'] = 1;
+                                    $shouldUpdate = true;
+                                }
+                                if ($shouldUpdate) {
+                                    $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
+                                        "Input '{$stockData['backorders']}'. Set backorders to 0 and use_config_backorders to 1";
+                                    $this->addMessageAndLog($message, "success", "quantity");
+                                }
+                            } elseif ($currentBackorders !== $backordersValue) {
+                                $stockUpdateData['backorders'] = $backordersValue;
+                                if ($currentUseConfig !== 0) {
+                                    $stockUpdateData['use_config_backorders'] = 0;
+                                }
+                                $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
+                                    "Set backorders from {$currentBackorders} to {$backordersValue}";
+                                $this->addMessageAndLog($message, "success", "quantity");
+                            } else {
+                                if ($currentUseConfig === 1) {
+                                    $stockUpdateData['use_config_backorders'] = 0;
+                                    $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
+                                        "Disabled use_config_backorders while value remains {$backordersValue}";
+                                    $this->addMessageAndLog($message, "success", "quantity");
+                                }
+                            }
+                        } else {
+                            $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : Invalid backorders value " .
+                                "'{$stockData['backorders']}'. Allowed values are 0, 1, 2";
+                            $this->addMessageAndLog($message, "error", "quantity");
+                        }
+                    }
+                    if ($finalQtyToSave > 0) {
+                        $setInStock = !empty($stockData['set_in_stock']);
+                        if ($setInStock && !$isInStock) {
+                            $stockUpdateData['is_in_stock'] = 1;
+                        }
+                    } elseif ($finalQtyToSave <= 0) {
+                        $setOutStock = !empty($stockData['set_out_stock']);
+                        if ($setOutStock && $isInStock) {
+                            $stockUpdateData['is_in_stock'] = 0;
+                        }
+                    }
+                    if ($oldQty !== $finalQtyToSave) {
+                        $stockUpdateData['qty'] = $finalQtyToSave;
+                        $stockUpdateData['old_qty'] = $oldQty;
+                    }
+                    if ($minCartQty && $currentMinSaleQty !== $minCartQty) {
+                        $stockUpdateData['min_sale_qty'] = $minCartQty;
+                    }
                 }
                 // Save stock data
                 if (!empty($stockUpdateData)) {
                     $product->setStockData($stockUpdateData);
                     $product->save();
-                    $message = "SAVED QTY: sku: '" . $sku . "' - product id <" .
-                        $productId . "> : " . json_encode($stockUpdateData);
+                    $message = "SAVED QTY: sku: '{$sku}' - product id <{$productId}> : " . json_encode($stockUpdateData);
                     $this->addMessageAndLog($message, "success", "quantity");
                 } else {
-                    $message = "SKIP QTY: sku '" . $sku . "' - product id <" .
-                        $productId . "> no data was changed";
+                    $message = "SKIP QTY: sku '{$sku}' - product id <{$productId}> no data was changed";
                     $this->addMessageAndLog($message, "success", "quantity");
                 }
             }
         } catch (\Exception $e) {
-            $message = "ERROR QTY: sku '" . $sku . "' - product id <" .
-                $productId . "> " . $e->getMessage();
+            $message = "ERROR QTY: sku '{$sku}' - product id <{$productId} " . $e->getMessage();
             $this->addMessageAndLog($message, "error", "quantity");
         }
 
@@ -835,28 +869,56 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             }
             $currentCategoryIds = $product->getCategoryIds();
             // Vegan category assignment
-            if (isset($productData['custom']['asign_vegan_category'])) {
-                $asignVeganCategory = (bool) $productData['custom']['asign_vegan_category'];
+            if (isset($productData['custom']['assign_vegan_category'])) {
+                $assignVeganCategory = (bool) $productData['custom']['assign_vegan_category'];
                 $veganCategory = !empty($productData['custom']['vegan_category'])
                     ? (int) $productData['custom']['vegan_category']
                     : 0;
                 if ($veganCategory > 0) {
-                    if ($asignVeganCategory === true) {
+                    if ($assignVeganCategory === true) {
                         if (!in_array($veganCategory, $categoryIds)) {
                             $categoryIds[] = $veganCategory;
                             if (!in_array($veganCategory, $currentCategoryIds)) {
-                                $message = "SET vegan category: sku: '" . $sku . "' - product id <" . $productId .
+                                $message = "SET Vegan category: sku: '" . $sku . "' - product id <" . $productId .
                                     "> to category ID " . $veganCategory;
                                 $this->addMessageAndLog($message, "success", "category");
                             }
                         }
-                    } elseif ($asignVeganCategory === false) {
+                    } elseif ($assignVeganCategory === false) {
                         $categoryIds = array_diff($categoryIds, [$veganCategory]);
                         if (in_array($veganCategory, $currentCategoryIds)) {
                             $this->categoryLinkRepository->deleteByIds($veganCategory, $sku);
                             $product->setCategoryIds($categoryIds);
-                            $message = "REMOVE vegan category: sku: '" . $sku . "' - product id <" . $productId .
+                            $message = "REMOVE Vegan category: sku: '" . $sku . "' - product id <" . $productId .
                                 "> from category ID " . $veganCategory;
+                            $this->addMessageAndLog($message, "success", "category");
+                        }
+                    }
+                }
+            }
+            // Clearance category assignment
+            $assignClearanceCategory = !empty($productData['custom']['assign_clearance_category']);
+            if ($assignClearanceCategory) {
+                $clearanceCategory = !empty($productData['custom']['clearance_category'])
+                    ? (string) $productData['custom']['clearance_category']
+                    : '';
+                if ($clearanceCategory !== '') {
+                    $clearanceCatIds = $this->categoryHelper->processCategoryTree(
+                        $clearanceCategory,
+                        $storeId,
+                        $this->allowCreateCategory
+                    );
+                    if (empty($clearanceCatIds)) {
+                        $message = "WARN: category '" . $clearanceCategory . "' not found";
+                        $this->results["response"]["category"]["warn"][] = $message;
+                        $this->log($message);
+                    } else {
+                        $newCatIds = array_diff($clearanceCatIds, $categoryIds);
+                        $categoryIds = array_merge($categoryIds, $newCatIds);
+                        $newlyAssignedIds = array_diff($newCatIds, $currentCategoryIds);
+                        foreach ($newlyAssignedIds as $clearanceCatId) {
+                            $message = "SET Clearance category: sku: '" . $sku . "' - product id <" . $productId .
+                                "> to category ID " . $clearanceCatId;
                             $this->addMessageAndLog($message, "success", "category");
                         }
                     }
@@ -880,7 +942,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             $imagesToImport = $productData['images'] ?? [];
             if (!empty($imagesToImport)) {
                 $newIoImages = $this->serializeImageArray($imagesToImport);
-                $currentIoImages = (string) $product->getData('io_images');
+                $currentIoImages = (string) $product->getData($this->ioImagesField);
                 $isDeleteRequested = !empty($productData['custom']['delete_existing_product_images']);
                 $isImageChangeNeeded = ($currentIoImages !== $newIoImages);
                 if ($isImageChangeNeeded) {
@@ -890,7 +952,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     $product = $this->productFactory->create()->load($productId);
                     if ($product && $product->getId()) {
                         $totalImagesChanges = $this->importImages($product, $imagesToImport);
-                        $product->setData('io_images', $newIoImages);
+                        $product->setData($this->ioImagesField, $newIoImages);
                         if ($totalImagesChanges > 0 || $product->hasDataChanges()) {
                             $product->save();
                             $message = "SAVED: sku '" . $product->getSku() . "' - product id <" .
@@ -1262,7 +1324,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $existingMediaGalleryEntries = $product->getMediaGalleryEntries();
         if ($existingMediaGalleryEntries && count($existingMediaGalleryEntries)) {
             $product->setMediaGalleryEntries([]);
-            $product->setData('io_images', '');
+            $product->setData($this->ioImagesField, '');
             try {
                 $this->productRepositoryInterface->save($product);
                 $message = "Delete existing images: sku '" . $product->getSku() . "' - product id <" .
@@ -1523,11 +1585,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             $foundCatIds = $this->categoryHelper->processCategoryTree(
                 (string) $attributeInfo['category_name'],
                 $storeId,
-                $allowCreateCat = false
+                $this->allowCreateCategory
             );
             if (empty($foundCatIds)) {
                 $message = "WARN: category '" . $attributeInfo['category_name'] . "' not found";
-                $this->results["response"]["category"]["error"][] = $message;
+                $this->results["response"]["category"]["warn"][] = $message;
                 $this->log($message);
             } else {
                 $categoryIdsToSet = array_merge($categoryIdsToSet, $foundCatIds);
@@ -1550,7 +1612,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
             return 0;
         }
         if (!empty($imageList)) {
-            $addedImagesCount = $this->imageHelper->populateProductImage($product, $imageList, $this);
+            $addedImagesCount = $this->imageHelper->populateProductImage($product, $imageList, $this->ioImagesField);
             return $addedImagesCount;
         }
         return 0;
@@ -1560,9 +1622,9 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * Get attribute data
      *
      * @param string $attrCode
-     * @return mixed
+     * @return ProductAttributeInterface|null
      */
-    public function getAttribute(string $attrCode): mixed
+    public function getAttribute(string $attrCode): ?ProductAttributeInterface
     {
         return $this->productAttributeHelper->getAttribute($attrCode);
     }
@@ -1570,20 +1632,56 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     /**
      * Get attribute value
      *
-     * @param string $attrCode
-     * @param string $attrOptionLabel
-     * @return mixed
+     * @param string $attributeCode
+     * @param string $optionLabel
+     * @return string|int|null
      */
-    public function getAttributeValue(string $attrCode, string $attrOptionLabel): mixed
-    {
-        $attrValue = $this->productAttributeHelper->getAttributeOptionValue($attrCode, $attrOptionLabel);
-        if (!$attrValue) {
-            $message = "ERROR: attribute '" . $attrCode . "' can't find option: '" . $attrOptionLabel . "'";
+    public function getAttributeValue(
+        string $attributeCode,
+        string $optionLabel
+    ): string|int|null {
+        $attrValue = $this->productAttributeHelper->getAttributeOptionValue($attributeCode, $optionLabel);
+        if (null === $attrValue) {
+            $message = "ERROR: Could not get or create attribute option value for attribute " .
+                "'{$attributeCode}' with label '{$optionLabel}'";
             $this->results["response"]["data"]["error"][] = $message;
             $this->log($message);
-            return null;
         }
         return $attrValue;
+    }
+
+    /**
+     * Get the comma-separated string of Option IDs for a 'multiselect' attribute
+     *
+     * @param string $attrCode
+     * @param array $optionLabels
+     * @return string|null
+     */
+    public function getMultiselectAttributeValue(string $attrCode, array $optionLabels): ?string
+    {
+        $optionIds = [];
+        $hasError = false;
+        foreach ($optionLabels as $optionLabel) {
+            $optionLabel = trim((string)$optionLabel);
+            if (empty($optionLabel)) {
+                continue;
+            }
+            $optionId = $this->productAttributeHelper->getAttributeOptionValue($attrCode, $optionLabel);
+            if ($optionId) {
+                $optionIds[] = (string) $optionId;
+            } else {
+                $message = "ERROR: Could not get or create option ID for multiselect attribute " .
+                    "'{$attrCode}' with label '{$optionLabel}'";
+                $this->results["response"]["data"]["error"][] = $message;
+                $this->log($message);
+                $hasError = true;
+            }
+        }
+        if ($hasError && empty($optionIds)) {
+            return null;
+        }
+        sort($optionIds);
+        return implode(',', $optionIds);
     }
 
     /**
@@ -1690,7 +1788,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     }
 
     /**
-     * Log message
+     * Logs a message
      *
      * @param string $message
      * @return void

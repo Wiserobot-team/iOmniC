@@ -1413,7 +1413,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     }
 
     /**
-     * Log message
+     * Logs a message
      *
      * @param string $message
      * @return void

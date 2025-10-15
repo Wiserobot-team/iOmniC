@@ -608,7 +608,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
     }
 
     /**
-     * Log message
+     * Logs a message
      *
      * @param string $message
      * @return void

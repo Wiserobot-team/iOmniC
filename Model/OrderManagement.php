@@ -1809,7 +1809,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
     }
 
     /**
-     * Log message
+     * Logs a message
      *
      * @param string $message
      * @return void

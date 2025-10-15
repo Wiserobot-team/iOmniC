@@ -489,7 +489,6 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         try {
             $productId = (int) $product->getId();
             $sku = $product->getSku();
-            $_qty = (int) $stockInfo['qty'];
             $stockUpdateData = [];
             $stockItem = $this->stockRegistryInterface->getStockItem($productId);
             if (!$stockItem->getId()) {
@@ -502,19 +501,95 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                 $isInStock = (bool) $stockItem->getData('is_in_stock');
                 $currentMinSaleQty = (int) $stockItem->getData('min_sale_qty');
                 $minCartQty = isset($stockInfo['min_sale_qty']) ? (int) $stockInfo['min_sale_qty'] : null;
-                if ($_qty > 0 && !$isInStock) {
-                    $stockUpdateData['is_in_stock'] = 1;
-                } elseif ($_qty <= 0 && $isInStock) {
-                    $stockUpdateData['is_in_stock'] = 0;
+                $newQty = (int) $stockInfo['qty'];
+                $finalQtyToSave = $newQty;
+                // Inventory quantity buffering
+                if (isset($stockInfo['buffer_qty'])) {
+                    $bufferInput = trim((string) $stockInfo['buffer_qty']);
+                    $operator = null;
+                    $bufferValue = 0;
+                    if (preg_match('/^([+-])(\d+)$/', $bufferInput, $matches)) {
+                        $operator = $matches[1];
+                        $bufferValue = (int) $matches[2];
+                    } elseif (is_numeric($bufferInput) && $bufferInput > 0) {
+                        $operator = '-';
+                        $bufferValue = (int) $bufferInput;
+                    }
+                    if ($bufferValue > 0 && !empty($operator)) {
+                        $oldSetQty = $finalQtyToSave;
+                        if ($operator === "-") {
+                            $finalQtyToSave = max(0, $finalQtyToSave - $bufferValue);
+                        } elseif ($operator === "+") {
+                            $finalQtyToSave = $finalQtyToSave + $bufferValue;
+                        }
+                        $message = "BUFFER QTY: sku: '{$sku}' - product id <{$productId}> : " .
+                            "Buffer '{$bufferInput}' from {$oldSetQty} to {$finalQtyToSave}";
+                        $this->addMessageAndLog($message, "success");
+                    }
                 }
-                if ($oldQty !== $_qty) {
-                    $stockUpdateData['qty'] = $_qty;
+                // Stock backorder configuration
+                if (isset($stockInfo['backorders'])) {
+                    $backordersValue = (int) $stockInfo['backorders'];
+                    if (in_array($backordersValue, [0, 1, 2])) {
+                        $currentBackorders = (int) $stockItem->getData('backorders');
+                        $currentUseConfig = (int) $stockItem->getData('use_config_backorders');
+                        if ($backordersValue === 0) {
+                            $shouldUpdate = false;
+                            if ($currentBackorders !== 0) {
+                                $stockUpdateData['backorders'] = 0;
+                                $shouldUpdate = true;
+                            }
+                            if ($currentUseConfig !== 1) {
+                                $stockUpdateData['use_config_backorders'] = 1;
+                                $shouldUpdate = true;
+                            }
+                            if ($shouldUpdate) {
+                                $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
+                                    "Input '{$stockInfo['backorders']}'. Set backorders to 0 and use_config_backorders to 1";
+                                $this->addMessageAndLog($message, "success");
+                            }
+                        } elseif ($currentBackorders !== $backordersValue) {
+                            $stockUpdateData['backorders'] = $backordersValue;
+                            if ($currentUseConfig !== 0) {
+                                $stockUpdateData['use_config_backorders'] = 0;
+                            }
+                            $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
+                                "Set backorders from {$currentBackorders} to {$backordersValue}";
+                            $this->addMessageAndLog($message, "success");
+                        } else {
+                            if ($currentUseConfig === 1) {
+                                $stockUpdateData['use_config_backorders'] = 0;
+                                $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
+                                    "Disabled use_config_backorders while value remains {$backordersValue}";
+                                $this->addMessageAndLog($message, "success");
+                            }
+                        }
+                    } else {
+                        $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : Invalid backorders value " .
+                            "'{$stockInfo['backorders']}'. Allowed values are 0, 1, 2";
+                        $this->addMessageAndLog($message, "error");
+                    }
+                }
+                if ($finalQtyToSave > 0) {
+                    $setInStock = !empty($stockInfo['set_in_stock']);
+                    if ($setInStock && !$isInStock) {
+                        $stockUpdateData['is_in_stock'] = 1;
+                    }
+                } elseif ($finalQtyToSave <= 0) {
+                    $setOutStock = !empty($stockInfo['set_out_stock']);
+                    if ($setOutStock && $isInStock) {
+                        $stockUpdateData['is_in_stock'] = 0;
+                    }
+                }
+                if ($oldQty !== $finalQtyToSave) {
+                    $stockUpdateData['qty'] = $finalQtyToSave;
                     $stockUpdateData['old_qty'] = $oldQty;
                 }
                 if ($minCartQty && $currentMinSaleQty !== $minCartQty) {
                     $stockUpdateData['min_sale_qty'] = $minCartQty;
                 }
             }
+            // Save stock data
             if (!empty($stockUpdateData)) {
                 $product->setStockData($stockUpdateData);
                 $product->save();
@@ -604,7 +679,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
     }
 
     /**
-     * Log message
+     * Logs a message
      *
      * @param string $message
      * @return void

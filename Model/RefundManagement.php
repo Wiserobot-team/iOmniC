@@ -305,7 +305,7 @@ class RefundManagement implements \WiseRobot\Io\Api\RefundManagementInterface
     }
 
     /**
-     * Log message
+     * Logs a message
      *
      * @param string $message
      * @return void
