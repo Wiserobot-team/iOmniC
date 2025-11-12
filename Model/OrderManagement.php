@@ -659,23 +659,25 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                     );
 
                     try {
-                        if ($product->getTypeId() == "bundle") {
+                        $params = [];
+                        $isBundle = $product->getTypeId() === "bundle";
+                        if ($isBundle) {
                             $params = [
                                 'product' => $product->getId(),
                                 'bundle_option' => $this->getBundleOptions($product),
                                 'qty' => (int) $webOrderItem['qty_ordered']
                             ];
-                            $cart->addProduct($product, new \Magento\Framework\DataObject($params));
-                            continue;
+                            $item = $cart->addProduct($product, new \Magento\Framework\DataObject($params));
+                        } else {
+                            $item = $cart->addProduct($product, (int) $webOrderItem['qty_ordered']);
                         }
-
-                        $item = $cart->addProduct($product, (int) $webOrderItem['qty_ordered']);
                         if (is_string($item)) {
                             $message = "Order " . $ioOrderId . " product '" . $product->getSku() . "': " . $item;
                             $this->results["response"]["data"]["error"][] = $message;
                             $this->log("ERROR " . $message);
                             return false;
                         }
+                        continue;
                     } catch (\Exception $e) {
                         $message = "Order " . $ioOrderId . " product '" .
                             $product->getSku() . "': " . $e->getMessage();
@@ -796,6 +798,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                         }
                     }
                     $ignoreFields = [
+                        'product_type',
                         'store_id',
                         'is_virtual',
                         'base_weee_tax_applied_amount',
@@ -832,6 +835,55 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                             }
                             if (!empty($dataToUpdate)) {
                                 $mageOrderItem->addData($dataToUpdate);
+                            }
+                            if (!empty($orderInfo["bundle_item_type"]) && $mageOrderItem->getProductType() === "bundle") {
+                                $children = $mageOrderItem->getChildrenItems();
+                                if (count($children) === 1) {
+                                    $componentItem = reset($children);
+                                    $rowTax = (float) $mageOrderItem->getData('tax_amount');
+                                    $taxPercent = (float) $mageOrderItem->getData('tax_percent');
+                                    $originalPriceUnitBundle = (float) $mageOrderItem->getData('original_price');
+                                    $rowTotalInclTax = (float) $mageOrderItem->getData('row_total_incl_tax');
+                                    $rowTotal = $rowTotalInclTax - $rowTax;
+                                    $componentQty = (int) $componentItem->getQtyOrdered();
+                                    $bundleQty = (int) $mageOrderItem->getQtyOrdered();
+                                    $componentRowTotal = $rowTotal;
+                                    $componentTaxAmount = $rowTax;
+                                    $componentPriceUnit = $componentQty > 0 ? $componentRowTotal / $componentQty : 0.00;
+                                    $componentTaxUnit = $componentQty > 0 ? $componentTaxAmount / $componentQty : 0.00;
+                                    $originalRowTotalBundle = $originalPriceUnitBundle * $bundleQty;
+                                    $componentOriginalPriceUnit = $componentQty > 0 ? $originalRowTotalBundle / $componentQty : 0.00;
+                                    $componentItem->setTaxAmount($componentTaxAmount)
+                                        ->setBaseTaxAmount($componentTaxAmount)
+                                        ->setTaxPercent($taxPercent)
+                                        ->setPrice($componentPriceUnit)
+                                        ->setBasePrice($componentPriceUnit)
+                                        ->setPriceInclTax($componentPriceUnit + $componentTaxUnit)
+                                        ->setBasePriceInclTax($componentPriceUnit + $componentTaxUnit)
+                                        ->setOriginalPrice($componentOriginalPriceUnit)
+                                        ->setBaseOriginalPrice($componentOriginalPriceUnit)
+                                        ->setRowTotal($componentRowTotal)
+                                        ->setBaseRowTotal($componentRowTotal)
+                                        ->setRowTotalInclTax($componentRowTotal + $componentTaxAmount)
+                                        ->setBaseRowTotalInclTax($componentRowTotal + $componentTaxAmount);
+                                    $transaction->addObject($componentItem);
+                                    $mageOrderItem->setTaxAmount(0.00)
+                                        ->setBaseTaxAmount(0.00)
+                                        ->setTaxPercent(0.00)
+                                        ->setPrice(0.00)
+                                        ->setBasePrice(0.00)
+                                        ->setPriceInclTax(0.00)
+                                        ->setBasePriceInclTax(0.00)
+                                        ->setOriginalPrice(0.00)
+                                        ->setBaseOriginalPrice(0.00)
+                                        ->setRowTotal(0.00)
+                                        ->setBaseRowTotal(0.00)
+                                        ->setRowTotalInclTax(0.00)
+                                        ->setBaseRowTotalInclTax(0.00);
+                                    $transaction->addObject($mageOrderItem);
+                                    $hasChanges = true;
+                                }
+                            } elseif (!empty($dataToUpdate)) {
                                 $transaction->addObject($mageOrderItem);
                                 $hasChanges = true;
                             }

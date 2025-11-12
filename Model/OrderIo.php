@@ -389,24 +389,24 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     ): array {
         return [
             // Basic order details
-            "order_id" => $order->getIncrementId(),
             "io_order_id" => $order->getData('io_order_id'),
             "site_order_id" => $order->getData('site_order_id'),
             "ca_order_id" => $order->getData('ca_order_id'),
+            "entity_id" => (int) $order->getId(),
+            "increment_id" => $order->getIncrementId(),
+            "order_id" => $order->getIncrementId(),
+            "store_id" => (int) $order->getStoreId(),
             // Customer details
-            "email" => $order->getData('customer_email'),
-            "firstname" => $order->getData('customer_firstname'),
-            "lastname" => $order->getData('customer_lastname'),
-            "prefix" => $order->getData('customer_prefix'),
-            "middlename" => $order->getData('customer_middlename'),
-            "suffix" => $order->getData('customer_suffix'),
-            "taxvat" => $order->getData('customer_taxvat'),
+            "email" => $order->getCustomerEmail(),
+            "firstname" => $order->getCustomerFirstname(),
+            "lastname" => $order->getCustomerLastname(),
+            "prefix" => $order->getCustomerPrefix(),
+            "middlename" => $order->getCustomerMiddlename(),
+            "suffix" => $order->getCustomerSuffix(),
+            "taxvat" => $order->getCustomerTaxvat(),
             // Order details
-            "created_at" => $order->getData('created_at'),
-            "updated_at" => $order->getData('updated_at'),
-            "store_id" => $order->getData('store_id'),
-            "entity_id" => $order->getData('entity_id'),
-            "increment_id" => $order->getData("increment_id"),
+            "created_at" => $order->getCreatedAt(),
+            "updated_at" => $order->getUpdatedAt(),
             "invoice_created_at" => $this->getInvoiceDate($order),
             "shipment_created_at" => $this->getShipmentDate($order),
             "creditmemo_created_at" => $this->getCreditMemoDate($order),
@@ -414,76 +414,76 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "order_state" => $order->getState(),
             "hold_before_state" => $order->getHoldBeforeState(),
             "hold_before_status" => $order->getHoldBeforeStatus(),
-            "tax_amount" => $order->getData('tax_amount'),
-            "base_tax_amount" => $order->getData('base_tax_amount'),
-            "discount_amount" => $order->getData('discount_amount'),
-            "base_discount_amount" => $order->getData('base_discount_amount'),
-            "coupon_code" => $order->getData('coupon_code'),
-            "subtotal" => $order->getData('subtotal'),
-            "base_subtotal" => $order->getData('base_subtotal'),
-            "subtotal_incl_tax" => $order->getData('subtotal_incl_tax'),
-            "base_subtotal_incl_tax" => $order->getData('base_subtotal_incl_tax'),
-            "grand_total" => $order->getData('grand_total'),
-            "base_grand_total" => $order->getData('base_grand_total'),
-            "total_paid" => $order->getData('total_paid'),
-            "base_total_paid" => $order->getData('base_total_paid'),
-            "total_qty_ordered" => (int) $order->getData('total_qty_ordered'),
-            "base_total_qty_ordered" => (int) $order->getData('base_total_qty_ordered'),
-            "base_currency_code" => $order->getData('base_currency_code'),
-            "store_currency_code" => $order->getData('store_currency_code'),
-            "order_currency_code" => $order->getData('order_currency_code'),
-            "global_currency_code" => $order->getData('global_currency_code'),
-            "is_virtual" => $order->getData('is_virtual'),
-            "remote_ip" => $order->getData('remote_ip'),
-            "weight" => $order->getData('weight'),
-            "base_to_global_rate" => $order->getData('base_to_global_rate'),
-            "base_to_order_rate" => $order->getData('base_to_order_rate'),
-            "store_to_base_rate" => $order->getData('store_to_base_rate'),
-            "store_to_order_rate" => $order->getData('store_to_order_rate'),
+            "is_virtual" => (bool) $order->getIsVirtual(),
+            "remote_ip" => $order->getRemoteIp(),
+            "weight" => $order->getWeight(),
+            "base_currency_code" => $order->getBaseCurrencyCode(),
+            "store_currency_code" => $order->getStoreCurrencyCode(),
+            "order_currency_code" => $order->getOrderCurrencyCode(),
+            "global_currency_code" => $order->getGlobalCurrencyCode(),
+            "base_to_global_rate" => $order->getBaseToGlobalRate(),
+            "base_to_order_rate" => $order->getBaseToOrderRate(),
+            "store_to_base_rate" => $order->getStoreToBaseRate(),
+            "store_to_order_rate" => $order->getStoreToOrderRate(),
+            "tax_amount" => $order->getTaxAmount(),
+            "base_tax_amount" => $order->getBaseTaxAmount(),
+            "discount_amount" => $order->getDiscountAmount(),
+            "base_discount_amount" => $order->getBaseDiscountAmount(),
+            "coupon_code" => $order->getCouponCode(),
+            "subtotal" => $order->getSubtotal(),
+            "base_subtotal" => $order->getBaseSubtotal(),
+            "subtotal_incl_tax" => $order->getSubtotalInclTax(),
+            "base_subtotal_incl_tax" => $order->getBaseSubtotalInclTax(),
+            "grand_total" => $order->getGrandTotal(),
+            "base_grand_total" => $order->getBaseGrandTotal(),
+            "total_paid" => $order->getTotalPaid(),
+            "base_total_paid" => $order->getBaseTotalPaid(),
+            "total_qty_ordered" => (int) $order->getTotalQtyOrdered(),
+            "base_total_qty_ordered" => (int) $order->getTotalQtyOrdered(),
             // Invoiced details
-            "discount_invoiced" => $order->getData('discount_invoiced'),
-            "base_discount_invoiced" => $order->getData('base_discount_invoiced'),
-            "tax_invoiced" => $order->getData('tax_invoiced'),
-            "base_tax_invoiced" => $order->getData('base_tax_invoiced'),
-            "subtotal_invoiced" => $order->getData('subtotal_invoiced'),
-            "base_subtotal_invoiced" => $order->getData('base_subtotal_invoiced'),
-            "total_invoiced" => $order->getData('total_invoiced'),
-            "base_total_invoiced" => $order->getData('base_total_invoiced'),
+            "discount_invoiced" => $order->getDiscountInvoiced(),
+            "base_discount_invoiced" => $order->getBaseDiscountInvoiced(),
+            "tax_invoiced" => $order->getTaxInvoiced(),
+            "base_tax_invoiced" => $order->getBaseTaxInvoiced(),
+            "subtotal_invoiced" => $order->getSubtotalInvoiced(),
+            "base_subtotal_invoiced" => $order->getBaseSubtotalInvoiced(),
+            "total_invoiced" => $order->getTotalInvoiced(),
+            "base_total_invoiced" => $order->getBaseTotalInvoiced(),
+            "shipping_invoiced" => $order->getShippingInvoiced(),
+            "base_shipping_invoiced" => $order->getBaseShippingInvoiced(),
             // Shipping details
-            "shipping_amount" => $order->getData('shipping_amount'),
-            "base_shipping_amount" => $order->getData('base_shipping_amount'),
-            "shipping_tax_amount" => $order->getData('shipping_tax_amount'),
-            "base_shipping_tax_amount" => $order->getData('base_shipping_tax_amount'),
-            "shipping_discount_amount" => $order->getData('shipping_discount_amount'),
-            "base_shipping_discount_amount" => $order->getData('base_shipping_discount_amount'),
-            "shipping_invoiced" => $order->getData('shipping_invoiced'),
-            "base_shipping_invoiced" => $order->getData('base_shipping_invoiced'),
-            "shipping_incl_tax" => $order->getData('shipping_incl_tax'),
-            "base_shipping_incl_tax" => $order->getData('base_shipping_incl_tax'),
-            "shipping_canceled" => $order->getData('shipping_canceled'),
-            "base_shipping_canceled" => $order->getData('base_shipping_canceled'),
+            "shipping_amount" => $order->getShippingAmount(),
+            "base_shipping_amount" => $order->getBaseShippingAmount(),
+            "shipping_tax_amount" => $order->getShippingTaxAmount(),
+            "base_shipping_tax_amount" => $order->getBaseShippingTaxAmount(),
+            "shipping_discount_amount" => $order->getShippingDiscountAmount(),
+            "base_shipping_discount_amount" => $order->getBaseShippingDiscountAmount(),
+            "shipping_incl_tax" => $order->getShippingInclTax(),
+            "base_shipping_incl_tax" => $order->getBaseShippingInclTax(),
             // Refunded details
-            "shipping_refunded" => $order->getData('shipping_refunded'),
-            "base_shipping_refunded" => $order->getData('base_shipping_refunded'),
-            "shipping_tax_refunded" => $order->getData('shipping_tax_refunded'),
-            "base_shipping_tax_refunded" => $order->getData('base_shipping_tax_refunded'),
-            "tax_refunded" => $order->getData('tax_refunded'),
-            "base_tax_refunded" => $order->getData('base_tax_refunded'),
-            "discount_refunded" => $order->getData('discount_refunded'),
-            "base_discount_refunded" => $order->getData('base_discount_refunded'),
-            "subtotal_refunded" => $order->getData('subtotal_refunded'),
-            "base_subtotal_refunded" => $order->getData('base_subtotal_refunded'),
-            "total_refunded" => $order->getData('total_refunded'),
-            "base_total_refunded" => $order->getData('base_total_refunded'),
+            "tax_refunded" => $order->getTaxRefunded(),
+            "base_tax_refunded" => $order->getBaseTaxRefunded(),
+            "discount_refunded" => $order->getDiscountRefunded(),
+            "base_discount_refunded" => $order->getBaseDiscountRefunded(),
+            "subtotal_refunded" => $order->getSubtotalRefunded(),
+            "base_subtotal_refunded" => $order->getBaseSubtotalRefunded(),
+            "total_refunded" => $order->getTotalRefunded(),
+            "base_total_refunded" => $order->getBaseTotalRefunded(),
+            "shipping_refunded" => $order->getShippingRefunded(),
+            "base_shipping_refunded" => $order->getBaseShippingRefunded(),
+            "shipping_tax_refunded" => $order->getShippingTaxRefunded(),
+            "base_shipping_tax_refunded" => $order->getBaseShippingTaxRefunded(),
             // Canceled details
-            "discount_canceled" => $order->getData('discount_canceled'),
-            "base_discount_canceled" => $order->getData('base_discount_canceled'),
-            "tax_canceled" => $order->getData('tax_canceled'),
-            "base_tax_canceled" => $order->getData('base_tax_canceled'),
-            "subtotal_canceled" => $order->getData('subtotal_canceled'),
-            "base_subtotal_canceled" => $order->getData('base_subtotal_canceled'),
-            "total_canceled" => $order->getData('total_canceled'),
-            "base_total_canceled" => $order->getData('base_total_canceled')
+            "discount_canceled" => $order->getDiscountCanceled(),
+            "base_discount_canceled" => $order->getBaseDiscountCanceled(),
+            "tax_canceled" => $order->getTaxCanceled(),
+            "base_tax_canceled" => $order->getBaseTaxCanceled(),
+            "subtotal_canceled" => $order->getSubtotalCanceled(),
+            "base_subtotal_canceled" => $order->getBaseSubtotalCanceled(),
+            "total_canceled" => $order->getTotalCanceled(),
+            "base_total_canceled" => $order->getBaseTotalCanceled(),
+            "shipping_canceled" => $order->getShippingCanceled(),
+            "base_shipping_canceled" => $order->getBaseShippingCanceled()
         ];
     }
 
@@ -498,15 +498,15 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     ): array {
         $payment = $order->getPayment();
         $magePaymentMethods = $this->getMagentoPaymentMethods();
-        $paymentMethod = $payment->getData("method");
+        $paymentMethod = $payment->getMethod();
         $paymentTitle = $magePaymentMethods[$paymentMethod] ?? "";
         return [
             "payment_method" => $paymentMethod,
             "payment_title" => $paymentTitle,
-            "cc_last4" => $payment->getData("cc_last4"),
-            "cc_exp_year" => $payment->getData("cc_exp_year"),
-            "cc_ss_start_month" => $payment->getData("cc_ss_start_month"),
-            "cc_ss_start_year" => $payment->getData("cc_ss_start_year")
+            "cc_last4" => $payment->getCcLast4(),
+            "cc_exp_year" => $payment->getCcExpYear(),
+            "cc_ss_start_month" => $payment->getCcSsStartMonth(),
+            "cc_ss_start_year" => $payment->getCcSsStartYear()
         ];
     }
 
@@ -589,6 +589,66 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     }
 
     /**
+     * Get Order Item Info
+     *
+     * @param \Magento\Sales\Model\Order\Item $item
+     * @return array
+     */
+    public function getItemInfo(
+        \Magento\Sales\Model\Order\Item $item
+    ): array {
+        $parentItem = $item->getParentItem();
+        $parentItemInfo = null;
+        if ($parentItem && $parentItem instanceof \Magento\Sales\Model\Order\Item) {
+            $parentItemInfo = [
+                "item_id" => (int) $parentItem->getItemId(),
+                "order_id" => (int) $parentItem->getOrderId(),
+                "sku" => $this->getItemSku($parentItem),
+                "name" => $parentItem->getName(),
+                "qty_ordered" => (int) $parentItem->getQtyOrdered(),
+                "product_type" => $parentItem->getProductType()
+            ];
+        }
+        $parentItemId = $item->getParentItemId();
+        $processedParentItemId = empty($parentItemId) ? null : (int) $parentItemId;
+        return [
+            "item_id" => (int) $item->getItemId(),
+            "parent_item_id" => $processedParentItemId,
+            "order_id" => (int) $item->getOrderId(),
+            "store_id" => (int) $item->getStoreId(),
+            "sku" => $this->getItemSku($item),
+            "name" => $item->getName(),
+            "qty_ordered" => (int) $item->getQtyOrdered(),
+            "qty_invoiced" => (int) $item->getQtyInvoiced(),
+            "qty_shipped" => (int) $item->getQtyShipped(),
+            "qty_refunded" => (int) $item->getQtyRefunded(),
+            "qty_canceled" => (int) $item->getQtyCanceled(),
+            "price" => $item->getPrice(),
+            "base_price" => $item->getBasePrice(),
+            "original_price" => $item->getOriginalPrice(),
+            "base_original_price" => $item->getBaseOriginalPrice(),
+            "price_incl_tax" => $item->getPriceInclTax(),
+            "base_price_incl_tax" => $item->getBasePriceInclTax(),
+            "row_total" => $item->getRowTotal(),
+            "base_row_total" => $item->getBaseRowTotal(),
+            "row_total_incl_tax" => $item->getRowTotalInclTax(),
+            "base_row_total_incl_tax" => $item->getBaseRowTotalInclTax(),
+            "row_weight" => $item->getRowWeight(),
+            "tax_amount" => $item->getTaxAmount(),
+            "base_tax_amount" => $item->getBaseTaxAmount(),
+            "tax_percent" => $item->getTaxPercent(),
+            "discount_amount" => $item->getDiscountAmount(),
+            "base_discount_amount" => $item->getBaseDiscountAmount(),
+            "discount_percent" => $item->getDiscountPercent(),
+            "product_options" => $this->serializer->serialize(
+                $item->getProductOptions()
+            ),
+            "product_type" => $item->getProductType(),
+            "parent_item" => $parentItemInfo
+        ];
+    }
+
+    /**
      * Get Order Shipment Info
      *
      * @param \Magento\Sales\Model\Order $order
@@ -601,33 +661,58 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         foreach ($order->getShipmentsCollection() as $shipment) {
             $itemsData = [];
             foreach ($shipment->getItemsCollection() as $shipmentItem) {
+                $productType = null;
+                $parentItemInfo = null;
+                $orderItem = $shipmentItem->getOrderItem();
+                if ($orderItem) {
+                    $productType = $orderItem->getProductType();
+                    $parentOrderItem = $orderItem->getParentItem();
+                    if ($parentOrderItem) {
+                        $parentItemInfo = [
+                            "item_id" => (int) $parentOrderItem->getItemId(),
+                            "order_id" => (int) $parentOrderItem->getOrderId(),
+                            "sku" => $this->getItemSku($parentOrderItem),
+                            "name" => $parentOrderItem->getName(),
+                            "qty_ordered" => (int) $parentOrderItem->getQtyOrdered(),
+                            "product_type" => $parentOrderItem->getProductType()
+                        ];
+                    }
+                }
                 $itemsData[] = [
-                    "sku" => $shipmentItem->getData("sku"),
-                    "name" => $shipmentItem->getData("name"),
-                    "price" => $shipmentItem->getData("price"),
-                    "qty" => (int) $shipmentItem->getData("qty"),
-                    "weight" => $shipmentItem->getData("weight")
+                    "entity_id" => (int) $shipmentItem->getId(),
+                    "parent_id" => (int) $shipmentItem->getParentId(),
+                    "order_item_id" => (int) $shipmentItem->getOrderItemId(),
+                    "sku" => $shipmentItem->getSku(),
+                    "name" => $shipmentItem->getName(),
+                    "price" => $shipmentItem->getPrice(),
+                    "qty" => (int) $shipmentItem->getQty(),
+                    "weight" => $shipmentItem->getWeight(),
+                    "product_type" => $productType,
+                    "parent_item" => $parentItemInfo
                 ];
             }
             $tracksData = [];
             foreach ($shipment->getTracksCollection() as $shipmentTrack) {
                 $tracksData[] = [
-                    "created_at" => $shipmentTrack->getData("created_at"),
-                    "updated_at" => $shipmentTrack->getData("updated_at"),
-                    "carrier_code" => $shipmentTrack->getData("carrier_code"),
-                    "title" => $shipmentTrack->getData("title"),
-                    "track_number" => $shipmentTrack->getData("track_number")
+                    "entity_id" => (int) $shipmentTrack->getId(),
+                    "parent_id" => (int) $shipmentTrack->getParentId(),
+                    "order_id" => (int) $shipmentTrack->getOrderId(),
+                    "created_at" => $shipmentTrack->getCreatedAt(),
+                    "updated_at" => $shipmentTrack->getUpdatedAt(),
+                    "carrier_code" => $shipmentTrack->getCarrierCode(),
+                    "title" => $shipmentTrack->getTitle(),
+                    "track_number" => $shipmentTrack->getTrackNumber()
                 ];
             }
             $shipmentInfo[] = [
-                "created_at" => $shipment->getData("created_at"),
-                "updated_at" => $shipment->getData("updated_at"),
-                "store_id" => $shipment->getData("store_id"),
-                "entity_id" => $shipment->getData("entity_id"),
-                "increment_id" => $shipment->getData("increment_id"),
-                "order_id" => $shipment->getData("order_id"),
-                "total_qty" => (int) $shipment->getData("total_qty"),
-                "total_weight" => $shipment->getData("total_weight"),
+                "entity_id" => (int) $shipment->getId(),
+                "increment_id" => $shipment->getIncrementId(),
+                "order_id" => (int) $shipment->getOrderId(),
+                "store_id" => (int) $shipment->getStoreId(),
+                "created_at" => $shipment->getCreatedAt(),
+                "updated_at" => $shipment->getUpdatedAt(),
+                "total_qty" => (int) $shipment->getTotalQty(),
+                "total_weight" => $shipment->getTotalWeight(),
                 "item_info" => $itemsData,
                 "track_info" => $tracksData
             ];
@@ -648,55 +733,81 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         foreach ($order->getCreditmemosCollection() as $refund) {
             $itemsData = [];
             foreach ($refund->getAllItems() as $refundItem) {
+                $productType = null;
+                $parentItemInfo = null;
+                $orderItem = $refundItem->getOrderItem();
+                if ($orderItem) {
+                    $productType = $orderItem->getProductType();
+                    $parentOrderItem = $orderItem->getParentItem();
+                    if ($parentOrderItem) {
+                        $parentItemInfo = [
+                            "item_id" => (int) $parentOrderItem->getItemId(),
+                            "order_id" => (int) $parentOrderItem->getOrderId(),
+                            "sku" => $this->getItemSku($parentOrderItem),
+                            "name" => $parentOrderItem->getName(),
+                            "qty_ordered" => (int) $parentOrderItem->getQtyOrdered(),
+                            "product_type" => $parentOrderItem->getProductType()
+                        ];
+                    }
+                }
                 $itemsData[] = [
-                    "sku" => $refundItem->getData("sku"),
-                    "name" => $refundItem->getData("name"),
-                    "price" => $refundItem->getData("price"),
-                    "base_price" => $refundItem->getData("base_price"),
-                    "price_incl_tax" => $refundItem->getData("price_incl_tax"),
-                    "base_price_incl_tax" => $refundItem->getData("base_price_incl_tax"),
-                    "qty" => (int) $refundItem->getData("qty"),
-                    "tax_amount" => $refundItem->getData("tax_amount"),
-                    "base_tax_amount" => $refundItem->getData("base_tax_amount"),
-                    "discount_amount" => $refundItem->getData("discount_amount"),
-                    "base_discount_amount" => $refundItem->getData("base_discount_amount"),
-                    "row_total" => $refundItem->getData("row_total"),
-                    "base_row_total" => $refundItem->getData("base_row_total"),
-                    "row_total_incl_tax" => $refundItem->getData("row_total_incl_tax"),
-                    "base_row_total_incl_tax" => $refundItem->getData("base_row_total_incl_tax"),
+                    "entity_id" => (int) $refundItem->getId(),
+                    "parent_id" => (int) $refundItem->getParentId(),
+                    "order_item_id" => (int) $refundItem->getOrderItemId(),
+                    "sku" => $refundItem->getSku(),
+                    "name" => $refundItem->getName(),
+                    "qty" => (int) $refundItem->getQty(),
+                    "price" => $refundItem->getPrice(),
+                    "base_price" => $refundItem->getBasePrice(),
+                    "price_incl_tax" => $refundItem->getPriceInclTax(),
+                    "base_price_incl_tax" => $refundItem->getBasePriceInclTax(),
+                    "tax_amount" => $refundItem->getTaxAmount(),
+                    "base_tax_amount" => $refundItem->getBaseTaxAmount(),
+                    "discount_amount" => $refundItem->getDiscountAmount(),
+                    "base_discount_amount" => $refundItem->getBaseDiscountAmount(),
+                    "row_total" => $refundItem->getRowTotal(),
+                    "base_row_total" => $refundItem->getBaseRowTotal(),
+                    "row_total_incl_tax" => $refundItem->getRowTotalInclTax(),
+                    "base_row_total_incl_tax" => $refundItem->getBaseRowTotalInclTax(),
+                    "product_type" => $productType,
+                    "parent_item" => $parentItemInfo
                 ];
             }
             $commentsData = [];
             foreach ($refund->getCommentsCollection() as $refundComment) {
                 $commentsData[] = [
-                    "created_at" => $refundComment->getData("created_at"),
-                    "comment" => $refundComment->getData("comment"),
-                    "is_customer_notified" => $refundComment->getData("is_customer_notified")
+                    "entity_id" => (int) $refundComment->getId(),
+                    "parent_id" => (int) $refundComment->getParentId(),
+                    "created_at" => $refundComment->getCreatedAt(),
+                    "updated_at" => $refundComment->getUpdatedAt(),
+                    "comment" => $refundComment->getComment(),
+                    "is_customer_notified" => $refundComment->getIsCustomerNotified(),
+                    "is_visible_on_front" => $refundComment->getIsVisibleOnFront()
                 ];
             }
             $refundInfo[] = [
-                "created_at" => $refund->getData("created_at"),
-                "updated_at" => $refund->getData("updated_at"),
-                "store_id" => $refund->getData("store_id"),
-                "entity_id" => $refund->getData("entity_id"),
-                "increment_id" => $refund->getData("increment_id"),
-                "order_id" => $refund->getData("order_id"),
-                "shipping_amount" => $refund->getData("shipping_amount"),
-                "base_shipping_amount" => $refund->getData("base_shipping_amount"),
-                "shipping_tax_amount" => $refund->getData("shipping_tax_amount"),
-                "base_shipping_tax_amount" => $refund->getData("base_shipping_tax_amount"),
-                "shipping_incl_tax" => $refund->getData("shipping_incl_tax"),
-                "base_shipping_incl_tax" => $refund->getData("base_shipping_incl_tax"),
-                "tax_amount" => $refund->getData("tax_amount"),
-                "base_tax_amount" => $refund->getData("base_tax_amount"),
-                "discount_amount" => $refund->getData("discount_amount"),
-                "base_discount_amount" => $refund->getData("base_discount_amount"),
-                "subtotal" => $refund->getData("subtotal"),
-                "base_subtotal" => $refund->getData("base_subtotal"),
-                "subtotal_incl_tax" => $refund->getData("subtotal_incl_tax"),
-                "base_subtotal_incl_tax" => $refund->getData("base_subtotal_incl_tax"),
-                "grand_total" => $refund->getData("grand_total"),
-                "base_grand_total" => $refund->getData("base_grand_total"),
+                "entity_id" => (int) $refund->getId(),
+                "increment_id" => $refund->getIncrementId(),
+                "order_id" => (int) $refund->getOrderId(),
+                "store_id" => (int) $refund->getStoreId(),
+                "created_at" => $refund->getCreatedAt(),
+                "updated_at" => $refund->getUpdatedAt(),
+                "shipping_amount" => $refund->getShippingAmount(),
+                "base_shipping_amount" => $refund->getBaseShippingAmount(),
+                "shipping_tax_amount" => $refund->getShippingTaxAmount(),
+                "base_shipping_tax_amount" => $refund->getBaseShippingTaxAmount(),
+                "shipping_incl_tax" => $refund->getShippingInclTax(),
+                "base_shipping_incl_tax" => $refund->getBaseShippingInclTax(),
+                "tax_amount" => $refund->getTaxAmount(),
+                "base_tax_amount" => $refund->getBaseTaxAmount(),
+                "discount_amount" => $refund->getDiscountAmount(),
+                "base_discount_amount" => $refund->getBaseDiscountAmount(),
+                "subtotal" => $refund->getSubtotal(),
+                "base_subtotal" => $refund->getBaseSubtotal(),
+                "subtotal_incl_tax" => $refund->getSubtotalInclTax(),
+                "base_subtotal_incl_tax" => $refund->getBaseSubtotalInclTax(),
+                "grand_total" => $refund->getGrandTotal(),
+                "base_grand_total" => $refund->getBaseGrandTotal(),
                 "item_info" => $itemsData,
                 "comment_info" => $commentsData
             ];
@@ -716,55 +827,17 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $histories = [];
         foreach ($order->getStatusHistories() as $statusHistory) {
             $histories[] = [
-                "comment" => $statusHistory->getData("comment"),
-                "status" => $statusHistory->getData("status"),
-                "created_at" => $statusHistory->getData("created_at"),
-                "entity_name" => $statusHistory->getData("entity_name")
+                "entity_id" => (int) $statusHistory->getId(),
+                "parent_id" => (int) $statusHistory->getParentId(),
+                "created_at" => $statusHistory->getCreatedAt(),
+                "comment" => $statusHistory->getComment(),
+                "status" => $statusHistory->getStatus(),
+                "entity_name" => $statusHistory->getEntityName(),
+                "is_customer_notified" => $statusHistory->getIsCustomerNotified(),
+                "is_visible_on_front" => $statusHistory->getIsVisibleOnFront()
             ];
         }
         return $histories;
-    }
-
-    /**
-     * Get Order Item Info
-     *
-     * @param \Magento\Sales\Model\Order\Item $item
-     * @return array
-     */
-    public function getItemInfo(
-        \Magento\Sales\Model\Order\Item $item
-    ): array {
-        return [
-            "sku" => $this->getItemSku($item),
-            "name" => $item->getName(),
-            "qty_ordered" => (int) $item->getQtyOrdered(),
-            "qty_invoiced" => (int) $item->getQtyInvoiced(),
-            "qty_shipped" => (int) $item->getQtyShipped(),
-            "qty_refunded" => (int) $item->getQtyRefunded(),
-            "qty_canceled" => (int) $item->getQtyCanceled(),
-            "product_type" => $item->getProductType(),
-            "price" => $item->getPrice(),
-            "base_price" => $item->getBasePrice(),
-            "original_price" => $item->getOriginalPrice(),
-            "base_original_price" => $item->getBaseOriginalPrice(),
-            "row_total" => $item->getRowTotal(),
-            "base_row_total" => $item->getBaseRowTotal(),
-            "row_total_incl_tax" => $item->getRowTotalInclTax(),
-            "base_row_total_incl_tax" => $item->getBaseRowTotalInclTax(),
-            "row_weight" => $item->getRowWeight(),
-            "price_incl_tax" => $item->getPriceInclTax(),
-            "base_price_incl_tax" => $item->getBasePriceInclTax(),
-            "tax_amount" => $item->getTaxAmount(),
-            "base_tax_amount" => $item->getBaseTaxAmount(),
-            "tax_percent" => $item->getTaxPercent(),
-            "discount_amount" => $item->getDiscountAmount(),
-            "base_discount_amount" => $item->getBaseDiscountAmount(),
-            "discount_percent" => $item->getDiscountPercent(),
-            "has_parent_item" => $this->getChildInfo($item),
-            "product_options" => $this->serializer->serialize(
-                $item->getData('product_options')
-            )
-        ];
     }
 
     /**
@@ -813,8 +886,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Framework\Data\Collection\AbstractDb $collection
     ): string {
         $firstItem = $collection->getFirstItem();
-        return $firstItem && $firstItem->getData('created_at')
-            ? $firstItem->getData('created_at')
+        return $firstItem && $firstItem->getCreatedAt()
+            ? $firstItem->getCreatedAt()
             : '';
     }
 
@@ -830,18 +903,6 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         return $item->getProductType() === 'configurable'
             ? (string) $item->getProductOptionByCode('simple_sku')
             : $item->getSku();
-    }
-
-    /**
-     * Get Child Info
-     *
-     * @param \Magento\Sales\Model\Order\Item $item
-     * @return string
-     */
-    public function getChildInfo(
-        \Magento\Sales\Model\Order\Item $item
-    ): string {
-        return $item->getParentItemId() ? 'yes' : 'no';
     }
 
     /**
