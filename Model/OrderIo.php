@@ -19,10 +19,9 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
-use Magento\Sales\Api\OrderRepositoryInterface;
 use Magento\Payment\Model\Config as PaymentConfig;
 use Magento\Shipping\Model\Config as ShippingConfig;
-use Magento\Directory\Model\RegionFactory;
+use Magento\Directory\Model\ResourceModel\Region\CollectionFactory as RegionCollectionFactory;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Serialize\SerializerInterface;
 use Magento\Framework\Webapi\Exception as WebapiException;
@@ -33,6 +32,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @var array
      */
     public array $results = [];
+    /**
+     * @var array|null
+     */
+    public $regionCodeMapCache = null;
     /**
      * @var ScopeConfigInterface
      */
@@ -50,10 +53,6 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      */
     public $orderCollectionFactory;
     /**
-     * @var OrderRepositoryInterface
-     */
-    public $orderRepository;
-    /**
      * @var PaymentConfig
      */
     public $paymentConfig;
@@ -62,9 +61,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      */
     public $shippingConfig;
     /**
-     * @var RegionFactory
+     * @var RegionCollectionFactory
      */
-    public $regionFactory;
+    public $regionCollectionFactory;
     /**
      * @var ResourceConnection
      */
@@ -79,10 +78,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @param StoreManagerInterface $storeManager
      * @param OrderFactory $orderFactory
      * @param OrderCollectionFactory $orderCollectionFactory
-     * @param OrderRepositoryInterface $orderRepository
      * @param PaymentConfig $paymentConfig
      * @param ShippingConfig $shippingConfig
-     * @param RegionFactory $regionFactory
+     * @param RegionCollectionFactory $regionCollectionFactory
      * @param ResourceConnection $resourceConnection
      * @param SerializerInterface $serializer
      */
@@ -91,10 +89,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         StoreManagerInterface $storeManager,
         OrderFactory $orderFactory,
         OrderCollectionFactory $orderCollectionFactory,
-        OrderRepositoryInterface $orderRepository,
         PaymentConfig $paymentConfig,
         ShippingConfig $shippingConfig,
-        RegionFactory $regionFactory,
+        RegionCollectionFactory $regionCollectionFactory,
         ResourceConnection $resourceConnection,
         SerializerInterface $serializer
     ) {
@@ -102,10 +99,9 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $this->storeManager = $storeManager;
         $this->orderFactory = $orderFactory;
         $this->orderCollectionFactory = $orderCollectionFactory;
-        $this->orderRepository = $orderRepository;
         $this->paymentConfig = $paymentConfig;
         $this->shippingConfig = $shippingConfig;
-        $this->regionFactory = $regionFactory;
+        $this->regionCollectionFactory = $regionCollectionFactory;
         $this->resourceConnection = $resourceConnection;
         $this->serializer = $serializer;
     }
@@ -176,8 +172,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getOrder(int|string $id, string $typeId = 'incrementId'): array
     {
         $typeId === "id"
-        ? $order = $this->orderFactory->create()->load($id)
-        : $order = $this->orderFactory->create()->loadByIncrementId($id);
+            ? $order = $this->orderFactory->create()->load($id)
+            : $order = $this->orderFactory->create()->loadByIncrementId($id);
         if (!$order || !$order->getId()) {
             return [];
         }
@@ -540,8 +536,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $shippingAddress = $order->getShippingAddress();
         $shippingRegionId = $shippingAddress ? $shippingAddress->getData('region_id') : null;
         if ($shippingRegionId) {
-            $shippingRegion = $this->regionFactory->create()->load($shippingRegionId);
-            $shippingRegionId = $shippingRegion->getId() ? $shippingRegion->getCode() : $shippingRegionId;
+            $shippingRegionId = $this->getRegionCodeById((int) $shippingRegionId);
         }
         return [
             "firstname" => $shippingAddress ? $shippingAddress->getData("firstname") : null,
@@ -571,8 +566,7 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         $billingAddress = $order->getBillingAddress();
         $billingRegionId = $billingAddress ? $billingAddress->getData('region_id') : null;
         if ($billingRegionId) {
-            $billingRegion = $this->regionFactory->create()->load($billingRegionId);
-            $billingRegionId = $billingRegion->getId() ? $billingRegion->getCode() : $billingRegionId;
+            $billingRegionId = $this->getRegionCodeById((int) $billingRegionId);
         }
         return [
             "firstname" => $billingAddress ? $billingAddress->getData("firstname") : null,
@@ -589,6 +583,28 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     }
 
     /**
+     * Get Region Code By Id
+     *
+     * @param int|null $regionId
+     * @return string
+     */
+    public function getRegionCodeById(?int $regionId): string
+    {
+        if (!$regionId) {
+            return '';
+        }
+        if ($this->regionCodeMapCache === null) {
+            $this->regionCodeMapCache = [];
+            $regionCollection = $this->regionCollectionFactory->create();
+            $regionCollection->addFieldToSelect(['region_id', 'code']);
+            foreach ($regionCollection as $region) {
+                $this->regionCodeMapCache[(int)$region->getId()] = $region->getCode();
+            }
+        }
+        return $this->regionCodeMapCache[$regionId] ?? (string)$regionId;
+    }
+
+    /**
      * Get Order Item Info
      *
      * @param \Magento\Sales\Model\Order\Item $item
@@ -597,17 +613,20 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     public function getItemInfo(
         \Magento\Sales\Model\Order\Item $item
     ): array {
+        $order = $item->getOrder();
         $parentItem = $item->getParentItem();
         $parentItemInfo = null;
+        $componentLookupMap = [];
+        $calculatedParentInfo = [];
+        if ($order && $parentItem) {
+            $componentLookupMap = $this->createComponentLookupMap($order);
+        }
         if ($parentItem && $parentItem instanceof \Magento\Sales\Model\Order\Item) {
-            $parentItemInfo = [
-                "item_id" => (int) $parentItem->getItemId(),
-                "order_id" => (int) $parentItem->getOrderId(),
-                "sku" => $this->getItemSku($parentItem),
-                "name" => $parentItem->getName(),
-                "qty_ordered" => (int) $parentItem->getQtyOrdered(),
-                "product_type" => $parentItem->getProductType()
-            ];
+            $parentItemInfo = $this->getParentItemInfo(
+                $parentItem,
+                $componentLookupMap,
+                $calculatedParentInfo
+            );
         }
         $parentItemId = $item->getParentItemId();
         $processedParentItemId = empty($parentItemId) ? null : (int) $parentItemId;
@@ -658,6 +677,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         $shipmentInfo = [];
+        $componentLookupMap = $this->createComponentLookupMap($order);
+        $calculatedParentInfo = [];
         foreach ($order->getShipmentsCollection() as $shipment) {
             $itemsData = [];
             foreach ($shipment->getItemsCollection() as $shipmentItem) {
@@ -668,14 +689,11 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     $productType = $orderItem->getProductType();
                     $parentOrderItem = $orderItem->getParentItem();
                     if ($parentOrderItem) {
-                        $parentItemInfo = [
-                            "item_id" => (int) $parentOrderItem->getItemId(),
-                            "order_id" => (int) $parentOrderItem->getOrderId(),
-                            "sku" => $this->getItemSku($parentOrderItem),
-                            "name" => $parentOrderItem->getName(),
-                            "qty_ordered" => (int) $parentOrderItem->getQtyOrdered(),
-                            "product_type" => $parentOrderItem->getProductType()
-                        ];
+                        $parentItemInfo = $this->getParentItemInfo(
+                            $parentOrderItem,
+                            $componentLookupMap,
+                            $calculatedParentInfo
+                        );
                     }
                 }
                 $itemsData[] = [
@@ -730,6 +748,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
         \Magento\Sales\Model\Order $order
     ): array {
         $refundInfo = [];
+        $componentLookupMap = $this->createComponentLookupMap($order);
+        $calculatedParentInfo = [];
         foreach ($order->getCreditmemosCollection() as $refund) {
             $itemsData = [];
             foreach ($refund->getAllItems() as $refundItem) {
@@ -740,14 +760,11 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                     $productType = $orderItem->getProductType();
                     $parentOrderItem = $orderItem->getParentItem();
                     if ($parentOrderItem) {
-                        $parentItemInfo = [
-                            "item_id" => (int) $parentOrderItem->getItemId(),
-                            "order_id" => (int) $parentOrderItem->getOrderId(),
-                            "sku" => $this->getItemSku($parentOrderItem),
-                            "name" => $parentOrderItem->getName(),
-                            "qty_ordered" => (int) $parentOrderItem->getQtyOrdered(),
-                            "product_type" => $parentOrderItem->getProductType()
-                        ];
+                        $parentItemInfo = $this->getParentItemInfo(
+                            $parentOrderItem,
+                            $componentLookupMap,
+                            $calculatedParentInfo
+                        );
                     }
                 }
                 $itemsData[] = [
@@ -813,6 +830,103 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             ];
         }
         return $refundInfo;
+    }
+
+    /**
+     * Create Component Lookup Map
+     *
+     * @param \Magento\Sales\Model\Order $order
+     * @return array
+     */
+    public function createComponentLookupMap(
+        \Magento\Sales\Model\Order $order
+    ): array {
+        $componentLookupMap = [];
+        foreach ($order->getAllItems() as $item) {
+            if ($item->getParentItem() && $item->getParentItem()->getProductType() === 'bundle') {
+                $parentId = $item->getParentItem()->getItemId();
+                $itemProductOptions = $item->getProductOptions();
+                if (!empty($itemProductOptions) && is_array($itemProductOptions)) {
+                    if (isset($itemProductOptions['bundle_selection_attributes'])) {
+                        $selectionAttrString = $itemProductOptions['bundle_selection_attributes'];
+                        try {
+                            $selectionAttr = $this->serializer->unserialize($selectionAttrString);
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                        if (isset($selectionAttr['option_id'])) {
+                            $optionId = (string) $selectionAttr['option_id'];
+                            if (!isset($componentLookupMap[$parentId])) {
+                                $componentLookupMap[$parentId] = [];
+                            }
+                            $componentLookupMap[$parentId][$optionId] = [
+                                'sku' => $item->getSku(),
+                                'price' => $item->getPrice()
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        return $componentLookupMap;
+    }
+
+    /**
+     * Get Parent Item Info
+     *
+     * @param \Magento\Sales\Model\Order\Item $parentOrderItem
+     * @param array $componentLookupMap
+     * @param array $cache
+     * @return array
+     */
+    public function getParentItemInfo(
+        \Magento\Sales\Model\Order\Item $parentOrderItem,
+        array $componentLookupMap,
+        array &$cache
+    ): array {
+        $parentId = $parentOrderItem->getItemId();
+        if (isset($cache[$parentId])) {
+            return $cache[$parentId];
+        }
+        $parentProductOptions = $parentOrderItem->getProductOptions();
+        $originalOptions = [];
+        $modifiedOptions = [];
+        if (!empty($parentProductOptions) && is_array($parentProductOptions)) {
+            $originalOptions = $parentProductOptions;
+            $modifiedOptions = $originalOptions;
+            if (isset($modifiedOptions['bundle_options']) && isset($componentLookupMap[$parentId])) {
+                foreach ($modifiedOptions['bundle_options'] as $optionId => &$optionData) {
+                    if (
+                        isset($optionData['value']) && is_array($optionData['value']) &&
+                        isset($componentLookupMap[$parentId][(string)$optionId])
+                    ) {
+                        $lookupData = $componentLookupMap[$parentId][(string)$optionId];
+                        foreach ($optionData['value'] as &$selectionValue) {
+                            $selectionValue['sku'] = $lookupData['sku'];
+                            $selectionValue['component_unit_price'] = $lookupData['price'];
+                        }
+                        unset($selectionValue);
+                    }
+                }
+                unset($optionData);
+            }
+        }
+        $parentItemInfo = [
+            "item_id" => (int) $parentOrderItem->getItemId(),
+            "order_id" => (int) $parentOrderItem->getOrderId(),
+            "sku" => $this->getItemSku($parentOrderItem),
+            "name" => $parentOrderItem->getName(),
+            "qty_ordered" => (int) $parentOrderItem->getQtyOrdered(),
+            "product_type" => $parentOrderItem->getProductType(),
+            "product_options" => $this->serializer->serialize(
+                $originalOptions
+            ),
+            "product_options_extended" => $this->serializer->serialize(
+                $modifiedOptions
+            )
+        ];
+        $cache[$parentId] = $parentItemInfo;
+        return $parentItemInfo;
     }
 
     /**

@@ -70,8 +70,8 @@ class OrderSync implements \WiseRobot\Io\Api\OrderSyncInterface
     public function getOrderSync(int|string $id, string $typeId = 'incrementId'): array
     {
         $typeId === "id"
-        ? $orderSync = $this->ioOrderFactory->create()->load($id)
-        : $orderSync = $this->ioOrderFactory->create()->load($id, "order_increment_id");
+            ? $orderSync = $this->ioOrderFactory->create()->load($id)
+            : $orderSync = $this->ioOrderFactory->create()->load($id, "order_increment_id");
         if (!$orderSync || !$orderSync->getId()) {
             return [];
         }
@@ -129,8 +129,8 @@ class OrderSync implements \WiseRobot\Io\Api\OrderSyncInterface
     public function deleteOrderSync(int|string $id, string $typeId = 'incrementId'): array
     {
         $typeId === "id"
-        ? $orderSync = $this->ioOrderFactory->create()->load($id)
-        : $orderSync = $this->ioOrderFactory->create()->load($id, "order_increment_id");
+            ? $orderSync = $this->ioOrderFactory->create()->load($id)
+            : $orderSync = $this->ioOrderFactory->create()->load($id, "order_increment_id");
         if (!$orderSync || !$orderSync->getId()) {
             $message = "Requested order sync {$typeId}: {$id} doesn't exist";
             $this->handleValidationError($message);
