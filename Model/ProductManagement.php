@@ -20,6 +20,7 @@ use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as ConfigurableProduct;
+use Magento\ConfigurableProduct\Model\ResourceModel\Product\Type\Configurable as ConfigurableResourceModel;
 use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
 use Magento\Tax\Model\ClassModelFactory;
 use Magento\Catalog\Api\Data\ProductLinkInterfaceFactory;
@@ -70,6 +71,10 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      * @var ConfigurableProduct
      */
     public $configurableProduct;
+    /**
+     * @var ConfigurableResourceModel
+     */
+    public $configurableResourceModel;
     /**
      * @var GroupedProduct
      */
@@ -254,6 +259,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         Filesystem $filesystem,
         StoreManagerInterface $storeManager,
         ConfigurableProduct $configurableProduct,
+        ConfigurableResourceModel $configurableResourceModel,
         GroupedProduct $groupedProduct,
         ClassModelFactory $classModelFactory,
         ProductLinkInterfaceFactory $productLink,
@@ -284,6 +290,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $this->filesystem = $filesystem;
         $this->storeManager = $storeManager;
         $this->configurableProduct = $configurableProduct;
+        $this->configurableResourceModel = $configurableResourceModel;
         $this->groupedProduct = $groupedProduct;
         $this->classModelFactory = $classModelFactory;
         $this->productLink = $productLink;
@@ -986,11 +993,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     $this->addMessageAndLog($message, "warn", "variation");
                     return false;
                 }
-                $childrenProductIds = $this->configurableProduct->create()
-                    ->getUsedProductIds($parent);
+                $allChildrenIds = $this->configurableResourceModel->getChildrenIds($parentId);
+                $childrenProductIds = !empty($allChildrenIds) ? current($allChildrenIds) : [];
                 $needChangConfigurable = false;
                 $hasParentError = false;
-                if (!in_array($productId, $childrenProductIds)) {
+                if (!in_array((string) $productId, $childrenProductIds)) {
                     $needChangConfigurable = true;
                 } else {
                     $configurableAttributes = $parent->getExtensionAttributes();
@@ -1092,8 +1099,11 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 
                     if (!$hasParentError) {
                         // Update configurable options and link children
-                        $childrenProductIds[] = $productId;
+                        if (!in_array((string) $productId, $childrenProductIds)) {
+                            $childrenProductIds[] = (string) $productId;
+                        }
                         $childrenProductIds = array_unique($childrenProductIds);
+                        $childrenProductIds = array_values($childrenProductIds);
                         $optionsFactory = $this->productOptionFactory;
                         $configurableOptions = $optionsFactory->create($configurableAttrData);
                         $configurableAttributes = $parent->getExtensionAttributes();
