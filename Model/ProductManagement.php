@@ -1262,12 +1262,17 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         array $categoryIds
     ): void {
         $dbw = $this->resourceConnection->getConnection('core_write');
+        $categoryTable = $this->resourceConnection->getTableName('catalog_category_entity');
         $productCategoryTable = $this->resourceConnection->getTableName('catalog_category_product');
         $insert = array_diff($categoryIds, $oldCategoryIds);
         $delete = array_diff($oldCategoryIds, $categoryIds);
         if (!empty($insert)) {
-            $data = array();
-            foreach ($insert as $categoryId) {
+            $select = $dbw->select()
+                ->from($categoryTable, ['entity_id'])
+                ->where('entity_id IN (?)', $insert);
+            $validCategoryIds = $dbw->fetchCol($select);
+            $data = [];
+            foreach ($validCategoryIds as $categoryId) {
                 $data[] = [
                     'category_id' => (int) $categoryId,
                     'product_id' => $productId,
@@ -1280,7 +1285,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         }
         if (!empty($delete)) {
             $where = [
-                'product_id = ?'  => $productId,
+                'product_id = ?' => $productId,
                 'category_id IN (?)' => $delete
             ];
             $dbw->delete($productCategoryTable, $where);
