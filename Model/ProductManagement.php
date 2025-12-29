@@ -853,73 +853,78 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
 
         // import categories
         try {
-            $categoryIds = !empty($productData['category_ids']) ? $productData['category_ids'] : [];
-            if (!is_array($categoryIds)) {
-                $categoryIds = [];
-            }
-            $currentCategoryIds = $product->getCategoryIds();
-            // Vegan category assignment
-            if (isset($productData['custom']['assign_vegan_category'])) {
-                $assignVeganCategory = (bool) $productData['custom']['assign_vegan_category'];
-                $veganCategory = !empty($productData['custom']['vegan_category'])
-                    ? (int) $productData['custom']['vegan_category']
-                    : 0;
-                if ($veganCategory > 0) {
-                    if ($assignVeganCategory === true) {
-                        if (!in_array($veganCategory, $categoryIds)) {
-                            $categoryIds[] = $veganCategory;
-                            if (!in_array($veganCategory, $currentCategoryIds)) {
-                                $message = "SET Vegan category: sku: '" . $sku . "' - product id <" . $productId .
-                                    "> to category ID " . $veganCategory;
+            if (!empty($productData['custom']['ignore_category_update'])) {
+                $message = "SKIP category update: sku '" . $sku . "' - ignore_category_update is enabled";
+                $this->addMessageAndLog($message, "success", "category");
+            } else {
+                $categoryIds = !empty($productData['category_ids']) ? $productData['category_ids'] : [];
+                if (!is_array($categoryIds)) {
+                    $categoryIds = [];
+                }
+                $currentCategoryIds = $product->getCategoryIds();
+                // Vegan category assignment
+                if (isset($productData['custom']['assign_vegan_category'])) {
+                    $assignVeganCategory = (bool) $productData['custom']['assign_vegan_category'];
+                    $veganCategory = !empty($productData['custom']['vegan_category'])
+                        ? (int) $productData['custom']['vegan_category']
+                        : 0;
+                    if ($veganCategory > 0) {
+                        if ($assignVeganCategory === true) {
+                            if (!in_array($veganCategory, $categoryIds)) {
+                                $categoryIds[] = $veganCategory;
+                                if (!in_array($veganCategory, $currentCategoryIds)) {
+                                    $message = "SET Vegan category: sku: '" . $sku . "' - product id <" . $productId .
+                                        "> to category ID " . $veganCategory;
+                                    $this->addMessageAndLog($message, "success", "category");
+                                }
+                            }
+                        } elseif ($assignVeganCategory === false) {
+                            $categoryIds = array_diff($categoryIds, [$veganCategory]);
+                            if (in_array($veganCategory, $currentCategoryIds)) {
+                                $this->categoryLinkRepository->deleteByIds($veganCategory, $sku);
+                                $product->setCategoryIds($categoryIds);
+                                $message = "REMOVE Vegan category: sku: '" . $sku . "' - product id <" . $productId .
+                                    "> from category ID " . $veganCategory;
                                 $this->addMessageAndLog($message, "success", "category");
                             }
                         }
-                    } elseif ($assignVeganCategory === false) {
-                        $categoryIds = array_diff($categoryIds, [$veganCategory]);
-                        if (in_array($veganCategory, $currentCategoryIds)) {
-                            $this->categoryLinkRepository->deleteByIds($veganCategory, $sku);
-                            $product->setCategoryIds($categoryIds);
-                            $message = "REMOVE Vegan category: sku: '" . $sku . "' - product id <" . $productId .
-                                "> from category ID " . $veganCategory;
-                            $this->addMessageAndLog($message, "success", "category");
+                    }
+                }
+                // Clearance category assignment
+                $assignClearanceCategory = !empty($productData['custom']['assign_clearance_category']);
+                if ($assignClearanceCategory) {
+                    $clearanceCategory = !empty($productData['custom']['clearance_category'])
+                        ? (string) $productData['custom']['clearance_category']
+                        : '';
+                    if ($clearanceCategory !== '') {
+                        $clearanceCatIds = $this->categoryHelper->processCategoryTree(
+                            $clearanceCategory,
+                            $storeId,
+                            $this->allowCreateCategory
+                        );
+                        if (empty($clearanceCatIds)) {
+                            $message = "WARN: category '" . $clearanceCategory . "' not found";
+                            $this->results["response"]["category"]["warn"][] = $message;
+                            $this->log($message);
+                        } else {
+                            $newCatIds = array_diff($clearanceCatIds, $categoryIds);
+                            $categoryIds = array_merge($categoryIds, $newCatIds);
+                            $newlyAssignedIds = array_diff($newCatIds, $currentCategoryIds);
+                            foreach ($newlyAssignedIds as $clearanceCatId) {
+                                $message = "SET Clearance category: sku: '" . $sku . "' - product id <" . $productId .
+                                    "> to category ID " . $clearanceCatId;
+                                $this->addMessageAndLog($message, "success", "category");
+                            }
                         }
                     }
                 }
-            }
-            // Clearance category assignment
-            $assignClearanceCategory = !empty($productData['custom']['assign_clearance_category']);
-            if ($assignClearanceCategory) {
-                $clearanceCategory = !empty($productData['custom']['clearance_category'])
-                    ? (string) $productData['custom']['clearance_category']
-                    : '';
-                if ($clearanceCategory !== '') {
-                    $clearanceCatIds = $this->categoryHelper->processCategoryTree(
-                        $clearanceCategory,
-                        $storeId,
-                        $this->allowCreateCategory
-                    );
-                    if (empty($clearanceCatIds)) {
-                        $message = "WARN: category '" . $clearanceCategory . "' not found";
-                        $this->results["response"]["category"]["warn"][] = $message;
-                        $this->log($message);
-                    } else {
-                        $newCatIds = array_diff($clearanceCatIds, $categoryIds);
-                        $categoryIds = array_merge($categoryIds, $newCatIds);
-                        $newlyAssignedIds = array_diff($newCatIds, $currentCategoryIds);
-                        foreach ($newlyAssignedIds as $clearanceCatId) {
-                            $message = "SET Clearance category: sku: '" . $sku . "' - product id <" . $productId .
-                                "> to category ID " . $clearanceCatId;
-                            $this->addMessageAndLog($message, "success", "category");
-                        }
-                    }
+                // Set product categories
+                if (!empty($categoryIds)) {
+                    $updateMethod = !empty($productData['custom']['category_update_method'])
+                        ? (int) $productData['custom']['category_update_method']
+                        : 1;
+                    $this->setCategories($product, $categoryIds, $updateMethod);
                 }
-            }
-            // Set product categories
-            if (!empty($categoryIds)) {
-                $updateMethod = !empty($productData['custom']['category_update_method'])
-                    ? (int) $productData['custom']['category_update_method']
-                    : 1;
-                $this->setCategories($product, $categoryIds, $updateMethod);
             }
         } catch (\Exception $e) {
             $message = "ERROR category: sku '" . $sku . "' - product id <" .
