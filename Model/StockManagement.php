@@ -533,22 +533,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                     if (in_array($backordersValue, [0, 1, 2])) {
                         $currentBackorders = (int) $stockItem->getData('backorders');
                         $currentUseConfig = (int) $stockItem->getData('use_config_backorders');
-                        if ($backordersValue === 0) {
-                            $shouldUpdate = false;
-                            if ($currentBackorders !== 0) {
-                                $stockUpdateData['backorders'] = 0;
-                                $shouldUpdate = true;
-                            }
-                            if ($currentUseConfig !== 1) {
-                                $stockUpdateData['use_config_backorders'] = 1;
-                                $shouldUpdate = true;
-                            }
-                            if ($shouldUpdate) {
-                                $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
-                                    "Input '{$stockInfo['backorders']}'. Set backorders to 0 and use_config_backorders to 1";
-                                $this->addMessageAndLog($message, "success");
-                            }
-                        } elseif ($currentBackorders !== $backordersValue) {
+                        if ($currentBackorders !== $backordersValue) {
                             $stockUpdateData['backorders'] = $backordersValue;
                             if ($currentUseConfig !== 0) {
                                 $stockUpdateData['use_config_backorders'] = 0;
@@ -556,13 +541,11 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                             $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
                                 "Set backorders from {$currentBackorders} to {$backordersValue}";
                             $this->addMessageAndLog($message, "success");
-                        } else {
-                            if ($currentUseConfig === 1) {
-                                $stockUpdateData['use_config_backorders'] = 0;
-                                $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
-                                    "Disabled use_config_backorders while value remains {$backordersValue}";
-                                $this->addMessageAndLog($message, "success");
-                            }
+                        } elseif ($currentUseConfig !== 0) {
+                            $stockUpdateData['use_config_backorders'] = 0;
+                            $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : " .
+                                "Forced backorders {$backordersValue} by disabling 'Use Config Settings'";
+                            $this->addMessageAndLog($message, "success");
                         }
                     } else {
                         $message = "SET BACKORDERS: sku: '{$sku}' - product id <{$productId}> : Invalid backorders value " .
