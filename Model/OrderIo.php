@@ -19,12 +19,16 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Sales\Model\OrderFactory;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
+use Magento\Catalog\Api\ProductRepositoryInterface;
+use Magento\Eav\Model\Config as EavConfig;
 use Magento\Payment\Model\Config as PaymentConfig;
 use Magento\Shipping\Model\Config as ShippingConfig;
 use Magento\Directory\Model\ResourceModel\Region\CollectionFactory as RegionCollectionFactory;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Serialize\SerializerInterface;
 use Magento\Framework\Webapi\Exception as WebapiException;
+use Magento\Framework\Module\Manager as ModuleManager;
+use Magento\Framework\ObjectManagerInterface;
 
 class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
 {
@@ -36,6 +40,14 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @var array|null
      */
     public $regionCodeMapCache = null;
+    /**
+     * @var array|null
+     */
+    public $splitBrandLabelsCache = null;
+    /**
+     * @var array
+     */
+    public $productBrandCache = [];
     /**
      * @var ScopeConfigInterface
      */
@@ -52,6 +64,14 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @var OrderCollectionFactory
      */
     public $orderCollectionFactory;
+    /**
+     * @var ProductRepositoryInterface
+     */
+    public $productRepository;
+    /**
+     * @var EavConfig
+     */
+    public $eavConfig;
     /**
      * @var PaymentConfig
      */
@@ -72,38 +92,58 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
      * @var SerializerInterface
      */
     public $serializer;
+    /**
+     * @var ModuleManager
+     */
+    public $moduleManager;
+    /**
+     * @var ObjectManagerInterface
+     */
+    public $objectManager;
 
     /**
      * @param ScopeConfigInterface $scopeConfig
      * @param StoreManagerInterface $storeManager
      * @param OrderFactory $orderFactory
      * @param OrderCollectionFactory $orderCollectionFactory
+     * @param ProductRepositoryInterface $productRepository
+     * @param EavConfig $eavConfig
      * @param PaymentConfig $paymentConfig
      * @param ShippingConfig $shippingConfig
      * @param RegionCollectionFactory $regionCollectionFactory
      * @param ResourceConnection $resourceConnection
      * @param SerializerInterface $serializer
+     * @param ModuleManager $moduleManager
+     * @param ObjectManagerInterface $objectManager
      */
     public function __construct(
         ScopeConfigInterface $scopeConfig,
         StoreManagerInterface $storeManager,
         OrderFactory $orderFactory,
         OrderCollectionFactory $orderCollectionFactory,
+        ProductRepositoryInterface $productRepository,
+        EavConfig $eavConfig,
         PaymentConfig $paymentConfig,
         ShippingConfig $shippingConfig,
         RegionCollectionFactory $regionCollectionFactory,
         ResourceConnection $resourceConnection,
-        SerializerInterface $serializer
+        SerializerInterface $serializer,
+        ModuleManager $moduleManager,
+        ObjectManagerInterface $objectManager
     ) {
         $this->scopeConfig = $scopeConfig;
         $this->storeManager = $storeManager;
         $this->orderFactory = $orderFactory;
         $this->orderCollectionFactory = $orderCollectionFactory;
+        $this->productRepository = $productRepository;
+        $this->eavConfig = $eavConfig;
         $this->paymentConfig = $paymentConfig;
         $this->shippingConfig = $shippingConfig;
         $this->regionCollectionFactory = $regionCollectionFactory;
         $this->resourceConnection = $resourceConnection;
         $this->serializer = $serializer;
+        $this->moduleManager = $moduleManager;
+        $this->objectManager = $objectManager;
     }
 
     /**
@@ -479,8 +519,89 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "total_canceled" => $order->getTotalCanceled(),
             "base_total_canceled" => $order->getBaseTotalCanceled(),
             "shipping_canceled" => $order->getShippingCanceled(),
-            "base_shipping_canceled" => $order->getBaseShippingCanceled()
+            "base_shipping_canceled" => $order->getBaseShippingCanceled(),
+            // C&S split order
+            "cs_split_order" => $this->checkIsBrandSplit($order)
         ];
+    }
+
+    /**
+     * Check if order contains items from split-configured brands
+     *
+     * @param \Magento\Sales\Model\Order $order
+     * @return bool
+     */
+    public function checkIsBrandSplit(
+        \Magento\Sales\Model\Order $order
+    ): bool {
+        if (!$this->isSplitOrderEnabled()) {
+            return false;
+        }
+        $brandArray = $this->getSplitBrandLabels();
+        if (empty($brandArray)) {
+            return false;
+        }
+        $storeId = $order->getStoreId();
+        foreach ($order->getAllItems() as $item) {
+            $sku = $this->getItemSku($item);
+            $cacheKey = $sku . '_' . $storeId;
+            if (!isset($this->productBrandCache[$cacheKey])) {
+                try {
+                    $product = $this->productRepository->get($sku, false, $storeId);
+                    $attr = $product->getResource()->getAttribute("brand");
+                    $this->productBrandCache[$cacheKey] = ($attr)
+                        ? $attr->getFrontend()->getValue($product)
+                        : null;
+                } catch (\Magento\Framework\Exception\NoSuchEntityException $e) {
+                    $this->productBrandCache[$cacheKey] = null;
+                }
+            }
+            if (in_array($this->productBrandCache[$cacheKey], $brandArray)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Retrieve brand labels from Sunarc Splitorderpro configuration
+     *
+     * @return array
+     */
+    public function getSplitBrandLabels(): array {
+        if ($this->splitBrandLabelsCache !== null) {
+            return $this->splitBrandLabelsCache;
+        }
+        $this->splitBrandLabelsCache = [];
+        $splitOrderHelper = $this->objectManager->get(
+            \Sunarc\Splitorderpro\Helper\Data::class
+        );
+        $splitData = $splitOrderHelper->getsplitorderproCollection();
+        if (!empty($splitData) && is_array($splitData)) {
+            list($splitAttribute, $attrOptionArray) = $splitData;
+            $attributeCode = $splitOrderHelper->getSplitAttrCode($splitAttribute);
+            if ($attributeCode === 'brand') {
+                $attribute = $this->eavConfig->getAttribute("catalog_product", $attributeCode);
+                $source = $attribute->getSource();
+                foreach ($attrOptionArray as $optionId) {
+                    $label = $source->getOptionText($optionId);
+                    if ($label) {
+                        $this->splitBrandLabelsCache[] = (string)$label;
+                    }
+                }
+            }
+        }
+        return $this->splitBrandLabelsCache;
+    }
+
+    /**
+     * Check if the Split Order module is enabled
+     *
+     * @return bool
+     */
+    public function isSplitOrderEnabled(): bool
+    {
+        return $this->moduleManager->isEnabled('Sunarc_Splitorderpro');
     }
 
     /**
