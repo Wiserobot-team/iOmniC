@@ -520,7 +520,8 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
             "base_total_canceled" => $order->getBaseTotalCanceled(),
             "shipping_canceled" => $order->getShippingCanceled(),
             "base_shipping_canceled" => $order->getBaseShippingCanceled(),
-            // C&S split order
+            // C&S split order (order level)
+            "split_order" => $order->getData('split_order'),
             "cs_split_order" => $this->checkIsBrandSplit($order)
         ];
     }
@@ -615,15 +616,15 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
     ): array {
         $payment = $order->getPayment();
         $magePaymentMethods = $this->getMagentoPaymentMethods();
-        $paymentMethod = $payment->getMethod();
-        $paymentTitle = $magePaymentMethods[$paymentMethod] ?? "";
+        $paymentMethod = $payment?->getMethod() ?? '';
+        $paymentTitle = $magePaymentMethods[$paymentMethod] ?? '';
         return [
             "payment_method" => $paymentMethod,
             "payment_title" => $paymentTitle,
-            "cc_last4" => $payment->getCcLast4(),
-            "cc_exp_year" => $payment->getCcExpYear(),
-            "cc_ss_start_month" => $payment->getCcSsStartMonth(),
-            "cc_ss_start_year" => $payment->getCcSsStartYear()
+            "cc_last4" => $payment?->getCcLast4() ?? '',
+            "cc_exp_year" => $payment?->getCcExpYear() ?? '',
+            "cc_ss_start_month" => $payment?->getCcSsStartMonth() ?? '',
+            "cc_ss_start_year" => $payment?->getCcSsStartYear() ?? ''
         ];
     }
 
@@ -784,7 +785,10 @@ class OrderIo implements \WiseRobot\Io\Api\OrderIoInterface
                 $item->getProductOptions()
             ),
             "product_type" => $item->getProductType(),
-            "parent_item" => $parentItemInfo
+            "parent_item" => $parentItemInfo,
+            // C&S split order (item level)
+            "split_attribute_code" => $item->getData('split_attribute_code'),
+            "split_attribute_value" => $item->getData('split_attribute_value')
         ];
     }
 
