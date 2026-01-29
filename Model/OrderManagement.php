@@ -39,6 +39,8 @@ use Magento\Sales\Model\Order\CreditmemoFactory;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Shipping\Model\Config as ShippingConfig;
 use Magento\Payment\Model\Config as PaymentConfig;
+use Magento\Sales\Model\ResourceModel\Order\Status\History\Collection as HistoryCollection;
+use Magento\Shipping\Model\ShipmentNotifier;
 use Magento\Framework\Webapi\Exception as WebapiException;
 use WiseRobot\Io\Model\IoOrderFactory;
 use WiseRobot\Io\Helper\Sku as SkuHelper;
@@ -158,6 +160,14 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      */
     public $paymentConfig;
     /**
+     * @var HistoryCollection
+     */
+    public $historyCollection;
+    /**
+     * @var ShipmentNotifier
+     */
+    public $shipmentNotifier;
+    /**
      * @var IoOrderFactory
      */
     public $ioOrderFactory;
@@ -190,6 +200,8 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
      * @param ProductRepositoryInterface $productRepository
      * @param ShippingConfig $shippingConfig
      * @param PaymentConfig $paymentConfig
+     * @param HistoryCollection $historyCollection
+     * @param ShipmentNotifier $shipmentNotifier
      * @param IoOrderFactory $ioOrderFactory
      * @param SkuHelper $skuHelper
      */
@@ -217,6 +229,8 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         ProductRepositoryInterface $productRepository,
         ShippingConfig $shippingConfig,
         PaymentConfig $paymentConfig,
+        HistoryCollection $historyCollection,
+        ShipmentNotifier $shipmentNotifier,
         IoOrderFactory $ioOrderFactory,
         SkuHelper $skuHelper
     ) {
@@ -243,6 +257,8 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
         $this->productRepository = $productRepository;
         $this->shippingConfig = $shippingConfig;
         $this->paymentConfig = $paymentConfig;
+        $this->historyCollection = $historyCollection;
+        $this->shipmentNotifier = $shipmentNotifier;
         $this->ioOrderFactory = $ioOrderFactory;
         $this->skuHelper = $skuHelper;
         $this->initializeResults();
@@ -1622,6 +1638,15 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $shipment->getOrder()->setIsInProcess(true);
                 $shipment->save();
                 $shipment->getOrder()->save();
+                if (!empty($_shipmentInfo['send_email'])) {
+                    $this->shipmentNotifier->notify($shipment);
+                    $shipment->save();
+                    $historyItem = $this->historyCollection->getUnnotifiedForInstance($shipment);
+                    if ($historyItem) {
+                        $historyItem->setIsCustomerNotified(1);
+                        $historyItem->save();
+                    }
+                }
                 $message = "Shipment '" . $shipment->getIncrementId() . "' imported for order <" .
                     $order->getIncrementId() . ">";
                 $this->results["response"]["data"]["success"][] = $message;

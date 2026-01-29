@@ -25,6 +25,8 @@ use Magento\Sales\Model\Order\ShipmentFactory;
 use Magento\Sales\Model\ResourceModel\Order\Shipment\CollectionFactory as ShipmentCollectionFactory;
 use Magento\Sales\Model\Order\Shipment\TrackFactory as ShipmentTrackFactory;
 use Magento\Sales\Api\ShipmentRepositoryInterface;
+use Magento\Sales\Model\ResourceModel\Order\Status\History\Collection as HistoryCollection;
+use Magento\Shipping\Model\ShipmentNotifier;
 use Magento\Framework\Webapi\Exception as WebapiException;
 
 class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterface
@@ -77,6 +79,14 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      * @var ShipmentRepositoryInterface
      */
     public $shipmentRepository;
+    /**
+     * @var HistoryCollection
+     */
+    public $historyCollection;
+    /**
+     * @var ShipmentNotifier
+     */
+    public $shipmentNotifier;
 
     /**
      * @param Filesystem $filesystem
@@ -88,6 +98,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
      * @param ShipmentCollectionFactory $shipmentCollectionFactory
      * @param ShipmentTrackFactory $shipmentTrackFactory
      * @param ShipmentRepositoryInterface $shipmentRepository
+     * @param HistoryCollection $historyCollection
+     * @param ShipmentNotifier $shipmentNotifier
      */
     public function __construct(
         Filesystem $filesystem,
@@ -98,7 +110,9 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         ShipmentFactory $shipmentFactory,
         ShipmentCollectionFactory $shipmentCollectionFactory,
         ShipmentTrackFactory $shipmentTrackFactory,
-        ShipmentRepositoryInterface $shipmentRepository
+        ShipmentRepositoryInterface $shipmentRepository,
+        HistoryCollection $historyCollection,
+        ShipmentNotifier $shipmentNotifier
     ) {
         $this->filesystem = $filesystem;
         $this->resourceConnection = $resourceConnection;
@@ -109,6 +123,8 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
         $this->shipmentCollectionFactory = $shipmentCollectionFactory;
         $this->shipmentTrackFactory = $shipmentTrackFactory;
         $this->shipmentRepository = $shipmentRepository;
+        $this->historyCollection = $historyCollection;
+        $this->shipmentNotifier = $shipmentNotifier;
         $this->initializeResults();
         $this->initializeLogger();
     }
@@ -477,6 +493,15 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
                 $shipment->getOrder()->setIsInProcess(true);
                 $shipment->save();
                 $shipment->getOrder()->save();
+                if (!empty($_shipmentInfo['send_email'])) {
+                    $this->shipmentNotifier->notify($shipment);
+                    $shipment->save();
+                    $historyItem = $this->historyCollection->getUnnotifiedForInstance($shipment);
+                    if ($historyItem) {
+                        $historyItem->setIsCustomerNotified(1);
+                        $historyItem->save();
+                    }
+                }
                 $message = "Shipment '{$shipment->getIncrementId()}' imported for order {$order->getIncrementId()}";
                 $this->addMessageAndLog($message, "success");
             }
