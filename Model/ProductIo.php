@@ -563,14 +563,23 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         ];
         $this->populateImageAttributes($productData, $product);
         $this->populateImageInfo($productData, $product);
-        if ($typeId !== "grouped") {
-            $productData['variation_info'] = $this->populateVariationInfo($product, $storeId);
-        }
-        if ($typeId !== "configurable") {
-            $productData['grouped_info'] = $this->populateGroupedProductInfo($product, $storeId);
-        }
-        if ($typeId === "bundle") {
-            $this->populateBundleProductInfo($productData, $product);
+        switch ($typeId) {
+            case 'configurable':
+                $this->populateVariationInfo($productData, $product, $storeId);
+                break;
+            case 'grouped':
+                $this->populateGroupedProductInfo($productData, $product, $storeId);
+                break;
+            case 'bundle':
+                $this->populateBundleProductInfo($productData, $product, $storeId);
+                break;
+            case 'simple':
+            case 'virtual':
+            default:
+                $this->populateVariationInfo($productData, $product, $storeId);
+                $this->populateGroupedProductInfo($productData, $product, $storeId);
+                $this->populateBundleProductInfo($productData, $product, $storeId);
+                break;
         }
         $this->populateProductLinks($productData, $product);
         $this->populateTierPricesInfo($productData, $productSku);
@@ -1025,14 +1034,16 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Populate Variation Info
      *
+     * @param array $productData
      * @param \Magento\Catalog\Model\Product $product
      * @param int $storeId
-     * @return array
+     * @return void
      */
     public function populateVariationInfo(
+        array &$productData,
         \Magento\Catalog\Model\Product $product,
         int $storeId
-    ): array {
+    ): void {
         $variationInfo = [
             'is_in_relationship' => false,
             'is_parent' => false,
@@ -1077,7 +1088,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 }
             }
         }
-        return $variationInfo;
+        $productData['variation_info'] = $variationInfo;
     }
 
     /**
@@ -1108,14 +1119,16 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
     /**
      * Populate Grouped Product Info
      *
+     * @param array $productData
      * @param \Magento\Catalog\Model\Product $product
      * @param int $storeId
-     * @return array
+     * @return void
      */
     public function populateGroupedProductInfo(
+        array &$productData,
         \Magento\Catalog\Model\Product $product,
         int $storeId
-    ): array {
+    ): void {
         $groupedInfo = [
             'is_parent' => false,
             'parent_sku' => '',
@@ -1145,7 +1158,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 }
             }
         }
-        return $groupedInfo;
+        $productData['grouped_info'] = $groupedInfo;
     }
 
     /**
@@ -1153,60 +1166,84 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
      *
      * @param array $productData
      * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
      * @return void
      */
     public function populateBundleProductInfo(
         array &$productData,
-        \Magento\Catalog\Model\Product $product
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
     ): void {
-        $bundleOptions = [];
-        $optionsCollection = $this->bundleProduct->getOptionsCollection($product);
-        $optionIds = $this->bundleProduct->getOptionsIds($product);
-        $selectionsCollection = $this->bundleProduct->getSelectionsCollection(
-            $optionIds,
-            $product
-        );
-        foreach ($optionsCollection as $option) {
-            $optionData = [
-                'option_id' => (int) $option->getId(),
-                'parent_id' => (int) $option->getParentId(),
-                'required' => (bool) $option->getRequired(),
-                'position' => (int) $option->getPosition(),
-                'type' => $option->getType(),
-                'default_title' => $option->getDefaultTitle(),
-                'title' => $option->getTitle(),
-                'selections' => []
-            ];
-            foreach ($selectionsCollection as $selection) {
-                if ((int) $selection->getOptionId() === (int) $option->getId()) {
-                    $selectionData = [
-                        'selection_id' => (int) $selection->getId(),
-                        'option_id' => (int) $selection->getOptionId(),
-                        'parent_product_id' => (int) $selection->getParentProductId(),
-                        'product_id' => (int) $selection->getProductId(),
-                        'sku' => $selection->getSku(),
-                        'name' => $selection->getName(),
-                        'position' => (int) $selection->getPosition(),
-                        'is_default' => (bool) $selection->getIsDefault(),
-                        'selection_price_type' => (int) $selection->getSelectionPriceType(),
-                        'selection_price_value' => (float) $selection->getSelectionPriceValue(),
-                        'selection_qty' => (float) $selection->getSelectionQty(),
-                        'selection_can_change_qty' => (bool) $selection->getSelectionCanChangeQty()
-                    ];
-                    $optionData['selections'][] = $selectionData;
+        $bundleInfo = [
+            'parent_skus' => '',
+            'sku_type' => '',
+            'price_type' => '',
+            'weight_type' => '',
+            'shipment_type' => '',
+            'bundle_options' => []
+        ];
+        $typeId = $product->getTypeId();
+        if ($typeId === 'bundle') {
+            $bundleOptions = [];
+            $optionsCollection = $this->bundleProduct->getOptionsCollection($product);
+            $optionIds = $this->bundleProduct->getOptionsIds($product);
+            $selectionsCollection = $this->bundleProduct->getSelectionsCollection(
+                $optionIds,
+                $product
+            );
+            foreach ($optionsCollection as $option) {
+                $optionData = [
+                    'option_id' => (int) $option->getId(),
+                    'parent_id' => (int) $option->getParentId(),
+                    'required' => (bool) $option->getRequired(),
+                    'position' => (int) $option->getPosition(),
+                    'type' => $option->getType(),
+                    'default_title' => $option->getDefaultTitle(),
+                    'title' => $option->getTitle(),
+                    'selections' => []
+                ];
+                foreach ($selectionsCollection as $selection) {
+                    if ((int) $selection->getOptionId() === (int) $option->getId()) {
+                        $selectionData = [
+                            'selection_id' => (int) $selection->getId(),
+                            'option_id' => (int) $selection->getOptionId(),
+                            'parent_product_id' => (int) $selection->getParentProductId(),
+                            'product_id' => (int) $selection->getProductId(),
+                            'sku' => $selection->getSku(),
+                            'name' => $selection->getName(),
+                            'position' => (int) $selection->getPosition(),
+                            'is_default' => (bool) $selection->getIsDefault(),
+                            'selection_price_type' => (int) $selection->getSelectionPriceType(),
+                            'selection_price_value' => (float) $selection->getSelectionPriceValue(),
+                            'selection_qty' => (float) $selection->getSelectionQty(),
+                            'selection_can_change_qty' => (bool) $selection->getSelectionCanChangeQty()
+                        ];
+                        $optionData['selections'][] = $selectionData;
+                    }
+                }
+                $bundleOptions[] = $optionData;
+            }
+            $bundleInfo['sku_type'] = (int) $product->getSkuType();
+            $bundleInfo['price_type'] = (int) $product->getPriceType();
+            $bundleInfo['weight_type'] = (int) $product->getWeightType();
+            $bundleInfo['shipment_type'] = (int) $product->getShipmentType();
+            $bundleInfo['bundle_options'] = $bundleOptions;
+        } else {
+            $childId = (int) $product->getId();
+            $parentIds = $this->bundleProduct->getParentIdsByChild($childId);
+            if (!empty($parentIds)) {
+                $parentCollection = $this->productCollectionFactory->create()
+                    ->addStoreFilter($storeId)
+                    ->addAttributeToSelect('sku')
+                    ->addFieldToFilter('entity_id', ['in' => $parentIds]);
+                $parentSkus = $parentCollection->getColumnValues('sku');
+                if (!empty($parentSkus)) {
+                    sort($parentSkus);
+                    $bundleInfo['parent_skus'] = implode(',', $parentSkus);
                 }
             }
-            $bundleOptions[] = $optionData;
         }
-        if (!empty($bundleOptions)) {
-            $productData['bundle_info'] = [
-                'sku_type' => (int) $product->getSkuType(),
-                'price_type' => (int) $product->getPriceType(),
-                'weight_type' => (int) $product->getWeightType(),
-                'shipment_type' => (int) $product->getShipmentType(),
-                'bundle_options' => $bundleOptions
-            ];
-        }
+        $productData['bundle_info'] = $bundleInfo;
     }
 
     /**
