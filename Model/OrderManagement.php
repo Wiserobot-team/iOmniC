@@ -1013,6 +1013,10 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
                 $newOrder->setData("rep_user_name", trim((string) $orderInfo["rep_user_name"]));
             }
 
+            if (!empty($orderInfo["order_tags"])) {
+                $newOrder->setData("order_tags", trim((string) $orderInfo["order_tags"]));
+            }
+
             // save order
             $savedOrder = $newOrder->save();
             if (!$isOldOrder && $skuIsMissing) {

@@ -28,6 +28,7 @@
                 <item name="ca_order_id" xsi:type="string">sales_order.ca_order_id</item>
                 <item name="buyer_user_id" xsi:type="string">sales_order.buyer_user_id</item>
                 <item name="io_marketplace" xsi:type="string">sales_order.io_marketplace</item>
+                <item name="order_tags" xsi:type="string">sales_order.order_tags</item>
             </argument>
         </arguments>
     </virtualType>

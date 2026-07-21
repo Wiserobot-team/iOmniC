@@ -19,7 +19,8 @@
             "site_order_id": true,
             "ca_order_id": true,
             "buyer_user_id": true,
-            "io_marketplace": true
+            "io_marketplace": true,
+            "order_tags": true
         }
     },
     "sales_order_grid": {
@@ -28,7 +29,8 @@
             "site_order_id": true,
             "ca_order_id": true,
             "buyer_user_id": true,
-            "io_marketplace": true
+            "io_marketplace": true,
+            "order_tags": true
         }
     }
 }

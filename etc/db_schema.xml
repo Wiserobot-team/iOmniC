@@ -35,6 +35,7 @@
         <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io Rithum Order ID"/>
         <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Buyer User ID"/>
         <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io Marketplace Source"/>
+        <column xsi:type="varchar" name="order_tags" nullable="true" comment="Io Order Tags"/>
     </table>
     <table name="sales_order_grid" resource="sales" engine="innodb" comment="Sales Flat Order Grid">
         <column xsi:type="varchar" name="io_order_id" nullable="true" comment="Io Order ID"/>
@@ -42,5 +43,6 @@
         <column xsi:type="varchar" name="ca_order_id" nullable="true" comment="Io Rithum Order ID"/>
         <column xsi:type="varchar" name="buyer_user_id" nullable="true" comment="Io Buyer User ID"/>
         <column xsi:type="varchar" name="io_marketplace" nullable="true" comment="Io Marketplace Source"/>
+        <column xsi:type="varchar" name="order_tags" nullable="true" comment="Io Order Tags"/>
     </table>
 </schema>
