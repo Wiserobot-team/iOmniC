@@ -563,24 +563,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         ];
         $this->populateImageAttributes($productData, $product);
         $this->populateImageInfo($productData, $product);
-        switch ($typeId) {
-            case 'configurable':
-                $this->populateVariationInfo($productData, $product, $storeId);
-                break;
-            case 'grouped':
-                $this->populateGroupedProductInfo($productData, $product, $storeId);
-                break;
-            case 'bundle':
-                $this->populateBundleProductInfo($productData, $product, $storeId);
-                break;
-            case 'simple':
-            case 'virtual':
-            default:
-                $this->populateVariationInfo($productData, $product, $storeId);
-                $this->populateGroupedProductInfo($productData, $product, $storeId);
-                $this->populateBundleProductInfo($productData, $product, $storeId);
-                break;
-        }
+        $this->populateVariationInfo($productData, $product, $storeId);
+        $this->populateGroupedProductInfo($productData, $product, $storeId);
+        $this->populateBundleProductInfo($productData, $product, $storeId);
         $this->populateProductLinks($productData, $product);
         $this->populateTierPricesInfo($productData, $productSku);
         $this->populateStockInfo($productData, $product);
@@ -1071,7 +1056,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                     $variationInfo['child_sku'] = implode(',', $childProductSkus);
                 }
             }
-        } elseif ($typeId === 'simple' || $typeId === 'virtual') {
+        } elseif (in_array($typeId, ['simple', 'virtual', 'downloadable'])) {
             $parentIds = $this->configurableProduct->create()
                 ->getParentIdsByChild($product->getId());
             if (!empty($parentIds)) {
@@ -1134,8 +1119,8 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             'parent_sku' => '',
             'child_sku' => ''
         ];
-        $productType = $product->getTypeId();
-        if ($productType === 'grouped') {
+        $typeId = $product->getTypeId();
+        if ($typeId === 'grouped') {
             $groupedInfo['is_parent'] = true;
             $childProductIds = $this->groupedProduct->create()->getChildrenIds($product->getId());
             if (!empty($childProductIds[3])) {
@@ -1149,7 +1134,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                     $groupedInfo['child_sku'] = implode(',', $childProductSkus);
                 }
             }
-        } elseif (in_array($productType, ['simple', 'virtual'])) {
+        } elseif (in_array($typeId, ['simple', 'virtual', 'downloadable'])) {
             $parentIds = $this->groupedProduct->create()->getParentIdsByChild($product->getId());
             if (!empty($parentIds)) {
                 $parentProduct = $this->productFactory->create()->setStoreId($storeId)->load($parentIds[0]);
@@ -1228,7 +1213,7 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
             $bundleInfo['weight_type'] = (int) $product->getWeightType();
             $bundleInfo['shipment_type'] = (int) $product->getShipmentType();
             $bundleInfo['bundle_options'] = $bundleOptions;
-        } else {
+        } elseif (in_array($typeId, ['simple', 'virtual', 'downloadable'])) {
             $childId = (int) $product->getId();
             $parentIds = $this->bundleProduct->getParentIdsByChild($childId);
             if (!empty($parentIds)) {

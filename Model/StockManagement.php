@@ -19,6 +19,9 @@ use Magento\Framework\Filesystem;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Catalog\Model\ProductFactory;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
+use Magento\ConfigurableProduct\Model\Product\Type\ConfigurableFactory as ConfigurableProduct;
+use Magento\GroupedProduct\Model\Product\Type\GroupedFactory as GroupedProduct;
+use Magento\Bundle\Model\Product\Type as BundleProduct;
 use Magento\CatalogInventory\Api\StockRegistryInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Eav\Api\AttributeRepositoryInterface;
@@ -54,6 +57,18 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
      */
     public $productCollectionFactory;
     /**
+     * @var ConfigurableProduct
+     */
+    public $configurableProduct;
+    /**
+     * @var GroupedProduct
+     */
+    public $groupedProduct;
+    /**
+     * @var BundleProduct
+     */
+    public $bundleProduct;
+    /**
      * @var StockRegistryInterface
      */
     public $stockRegistryInterface;
@@ -82,6 +97,9 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
      * @param Filesystem $filesystem
      * @param ProductFactory $productFactory
      * @param ProductCollectionFactory $productCollectionFactory
+     * @param ConfigurableProduct $configurableProduct
+     * @param GroupedProduct $groupedProduct
+     * @param BundleProduct $bundleProduct
      * @param StockRegistryInterface $stockRegistryInterface
      * @param StoreManagerInterface $storeManager
      * @param AttributeRepositoryInterface $attributeRepositoryInterface
@@ -93,6 +111,9 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         Filesystem $filesystem,
         ProductFactory $productFactory,
         ProductCollectionFactory $productCollectionFactory,
+        ConfigurableProduct $configurableProduct,
+        GroupedProduct $groupedProduct,
+        BundleProduct $bundleProduct,
         StockRegistryInterface $stockRegistryInterface,
         StoreManagerInterface $storeManager,
         AttributeRepositoryInterface $attributeRepositoryInterface,
@@ -103,6 +124,9 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         $this->filesystem = $filesystem;
         $this->productFactory = $productFactory;
         $this->productCollectionFactory = $productCollectionFactory;
+        $this->configurableProduct = $configurableProduct;
+        $this->groupedProduct = $groupedProduct;
+        $this->bundleProduct = $bundleProduct;
         $this->stockRegistryInterface = $stockRegistryInterface;
         $this->storeManager = $storeManager;
         $this->attributeRepositoryInterface = $attributeRepositoryInterface;
@@ -120,13 +144,15 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
      * @param string $filter
      * @param int $page
      * @param int $limit
+     * @param bool $variation
      * @return array
      */
     public function getList(
         int $store,
         string $filter = "",
         int $page = 1,
-        int $limit = 100
+        int $limit = 100,
+        bool $variation = false
     ): array {
         $storeInfo = $this->getStoreInfo($store);
         $productCollection = $this->createProductCollection($store);
@@ -138,7 +164,7 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         foreach ($productCollection as $product) {
             $sku = $product->getData("sku");
             if ($sku) {
-                $stockData = $this->formatStockData($product);
+                $stockData = $this->formatStockData($product, $variation);
                 if (!empty($stockData)) {
                     $stockData['store'] = $storeName;
                     $result[$sku] = $stockData;
@@ -293,21 +319,25 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
      * Get Stock Data
      *
      * @param \Magento\Catalog\Model\Product $product
+     * @param bool $variation
      * @return array
      */
     public function formatStockData(
-        \Magento\Catalog\Model\Product $product
+        \Magento\Catalog\Model\Product $product,
+        bool $variation = false
     ): array {
         $productSku = $product->getData("sku");
+        $storeId = (int) $product->getData("store_id");
         $typeId = $product->getData("type_id");
         $status = $product->getData("status");
         $qty = (int) $product->getData("qty");
         $minCartQty = (int) $product->getData("min_sale_qty");
         $stockData = [
             'stock_info' => [
-                "store_id" => (int) $product->getData("store_id"),
+                "store_id" => $storeId,
                 'product_id' => (int) $product->getData("entity_id"),
                 'sku' => $productSku,
+                'type_id' => $typeId,
                 'created_at' => $product->getData("created_at"),
                 'updated_at' => $product->getData("updated_at"),
                 'status' => $status == 2 ? 'Disabled' : 'Enabled',
@@ -318,11 +348,231 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                 "is_in_stock" => (int) $product->getData("is_in_stock"),
             ]
         ];
+        if ($variation) {
+            $this->populateVariationInfo($stockData, $product, $storeId);
+            $this->populateGroupedProductInfo($stockData, $product, $storeId);
+            $this->populateBundleProductInfo($stockData, $product, $storeId);
+        }
         if ($this->isMSIEnabled()) {
             $this->populateSourceItemsInfo($stockData, $productSku);
             $this->populateSalableQuantityInfo($stockData, $productSku, $typeId);
         }
         return $stockData;
+    }
+
+    /**
+     * Populate Variation Info
+     *
+     * @param array $stockData
+     * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
+     * @return void
+     */
+    public function populateVariationInfo(
+        array &$stockData,
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): void {
+        $variationInfo = [
+            'is_in_relationship' => false,
+            'is_parent' => false,
+            'parent_sku' => '',
+            'super_attribute' => '',
+            'child_sku' => ''
+        ];
+        $typeId = $product->getTypeId();
+        if ($typeId === 'configurable') {
+            $variationInfo = [
+                'is_in_relationship' => true,
+                'is_parent' => true,
+                'parent_sku' => $product->getSku(),
+                'super_attribute' => $this->getRelationshipName($product) ?: ''
+            ];
+            $childProductIds = $this->configurableProduct->create()->getUsedProductIds($product);
+            if (!empty($childProductIds)) {
+                $productCollection = $this->productCollectionFactory->create()
+                    ->addStoreFilter($storeId)
+                    ->addAttributeToSelect('sku')
+                    ->addFieldToFilter('entity_id', ['in' => $childProductIds]);
+                $childProductSkus = $productCollection->getColumnValues('sku');
+                if (!empty($childProductSkus)) {
+                    sort($childProductSkus);
+                    $variationInfo['child_sku'] = implode(',', $childProductSkus);
+                }
+            }
+        } elseif (in_array($typeId, ['simple', 'virtual', 'downloadable'])) {
+            $parentIds = $this->configurableProduct->create()
+                ->getParentIdsByChild($product->getId());
+            if (!empty($parentIds)) {
+                $parentProduct = $this->productFactory->create()
+                    ->setStoreId($storeId)
+                    ->load($parentIds[0]);
+                if ($parentProduct->getId()) {
+                    $variationInfo = [
+                        'is_in_relationship' => true,
+                        'is_parent' => false,
+                        'parent_sku' => $parentProduct->getSku(),
+                        'super_attribute' => $this->getRelationshipName($parentProduct) ?: ''
+                    ];
+                }
+            }
+        }
+        $stockData['variation_info'] = $variationInfo;
+    }
+
+    /**
+     * Get Configurable Product Attributes
+     *
+     * @param \Magento\Catalog\Model\Product $parentConfigurableProduct
+     * @return string
+     */
+    public function getRelationshipName(
+        \Magento\Catalog\Model\Product $parentConfigurableProduct
+    ): string {
+        if ($parentConfigurableProduct->getTypeId() !== "configurable") {
+            return '';
+        }
+        $productAttributeOptions = $this->configurableProduct->create()
+            ->getConfigurableAttributesAsArray($parentConfigurableProduct);
+        if (empty($productAttributeOptions)) {
+            return '';
+        }
+        $productConfigurableAttrs = array_column($productAttributeOptions, 'attribute_code');
+        if (empty($productConfigurableAttrs)) {
+            return '';
+        }
+        sort($productConfigurableAttrs);
+        return implode(',', $productConfigurableAttrs);
+    }
+
+    /**
+     * Populate Grouped Product Info
+     *
+     * @param array $stockData
+     * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
+     * @return void
+     */
+    public function populateGroupedProductInfo(
+        array &$stockData,
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): void {
+        $groupedInfo = [
+            'is_parent' => false,
+            'parent_sku' => '',
+            'child_sku' => ''
+        ];
+        $typeId = $product->getTypeId();
+        if ($typeId === 'grouped') {
+            $groupedInfo['is_parent'] = true;
+            $childProductIds = $this->groupedProduct->create()->getChildrenIds($product->getId());
+            if (!empty($childProductIds[3])) {
+                $productCollection = $this->productCollectionFactory->create()
+                    ->addStoreFilter($storeId)
+                    ->addAttributeToSelect('sku')
+                    ->addFieldToFilter('entity_id', ['in' => $childProductIds[3]]);
+                $childProductSkus = $productCollection->getColumnValues('sku');
+                if (!empty($childProductSkus)) {
+                    sort($childProductSkus);
+                    $groupedInfo['child_sku'] = implode(',', $childProductSkus);
+                }
+            }
+        } elseif (in_array($typeId, ['simple', 'virtual', 'downloadable'])) {
+            $parentIds = $this->groupedProduct->create()->getParentIdsByChild($product->getId());
+            if (!empty($parentIds)) {
+                $parentProduct = $this->productFactory->create()->setStoreId($storeId)->load($parentIds[0]);
+                if ($parentProduct->getId()) {
+                    $groupedInfo['parent_sku'] = $parentProduct->getSku();
+                }
+            }
+        }
+        $stockData['grouped_info'] = $groupedInfo;
+    }
+
+    /**
+     * Populate Bundle Product Info
+     *
+     * @param array $stockData
+     * @param \Magento\Catalog\Model\Product $product
+     * @param int $storeId
+     * @return void
+     */
+    public function populateBundleProductInfo(
+        array &$stockData,
+        \Magento\Catalog\Model\Product $product,
+        int $storeId
+    ): void {
+        $bundleInfo = [
+            'parent_skus' => '',
+            'sku_type' => '',
+            'price_type' => '',
+            'weight_type' => '',
+            'shipment_type' => '',
+            'bundle_options' => []
+        ];
+        $typeId = $product->getTypeId();
+        if ($typeId === 'bundle') {
+            $bundleOptions = [];
+            $optionsCollection = $this->bundleProduct->getOptionsCollection($product);
+            $optionIds = $this->bundleProduct->getOptionsIds($product);
+            $selectionsCollection = $this->bundleProduct->getSelectionsCollection(
+                $optionIds,
+                $product
+            );
+            foreach ($optionsCollection as $option) {
+                $optionData = [
+                    'option_id' => (int) $option->getId(),
+                    'parent_id' => (int) $option->getParentId(),
+                    'required' => (bool) $option->getRequired(),
+                    'position' => (int) $option->getPosition(),
+                    'type' => $option->getType(),
+                    'default_title' => $option->getDefaultTitle(),
+                    'title' => $option->getTitle(),
+                    'selections' => []
+                ];
+                foreach ($selectionsCollection as $selection) {
+                    if ((int) $selection->getOptionId() === (int) $option->getId()) {
+                        $selectionData = [
+                            'selection_id' => (int) $selection->getId(),
+                            'option_id' => (int) $selection->getOptionId(),
+                            'parent_product_id' => (int) $selection->getParentProductId(),
+                            'product_id' => (int) $selection->getProductId(),
+                            'sku' => $selection->getSku(),
+                            'name' => $selection->getName(),
+                            'position' => (int) $selection->getPosition(),
+                            'is_default' => (bool) $selection->getIsDefault(),
+                            'selection_price_type' => (int) $selection->getSelectionPriceType(),
+                            'selection_price_value' => (float) $selection->getSelectionPriceValue(),
+                            'selection_qty' => (float) $selection->getSelectionQty(),
+                            'selection_can_change_qty' => (bool) $selection->getSelectionCanChangeQty()
+                        ];
+                        $optionData['selections'][] = $selectionData;
+                    }
+                }
+                $bundleOptions[] = $optionData;
+            }
+            $bundleInfo['sku_type'] = (int) $product->getSkuType();
+            $bundleInfo['price_type'] = (int) $product->getPriceType();
+            $bundleInfo['weight_type'] = (int) $product->getWeightType();
+            $bundleInfo['shipment_type'] = (int) $product->getShipmentType();
+            $bundleInfo['bundle_options'] = $bundleOptions;
+        } elseif (in_array($typeId, ['simple', 'virtual', 'downloadable'])) {
+            $childId = (int) $product->getId();
+            $parentIds = $this->bundleProduct->getParentIdsByChild($childId);
+            if (!empty($parentIds)) {
+                $parentCollection = $this->productCollectionFactory->create()
+                    ->addStoreFilter($storeId)
+                    ->addAttributeToSelect('sku')
+                    ->addFieldToFilter('entity_id', ['in' => $parentIds]);
+                $parentSkus = $parentCollection->getColumnValues('sku');
+                if (!empty($parentSkus)) {
+                    sort($parentSkus);
+                    $bundleInfo['parent_skus'] = implode(',', $parentSkus);
+                }
+            }
+        }
+        $stockData['bundle_info'] = $bundleInfo;
     }
 
     /**

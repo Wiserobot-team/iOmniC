@@ -24,13 +24,15 @@ interface StockManagementInterface
      * @param string $filter
      * @param int $page
      * @param int $limit
+     * @param bool $variation
      * @return array
      */
     public function getList(
         int $store,
         string $filter = "",
         int $page = 1,
-        int $limit = 100
+        int $limit = 100,
+        bool $variation = false
     ): array;
 
     /**
