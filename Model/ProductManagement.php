@@ -1307,7 +1307,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
     {
         $pairs = [];
         foreach ($imageArray as $key => $value) {
-            $pairs[] = trim($key) . '=' . trim($value);
+            $pairs[] = trim((string) $key) . '=' . trim((string) $value);
         }
         return implode(',', $pairs);
     }

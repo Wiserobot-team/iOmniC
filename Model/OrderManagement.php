@@ -730,7 +730,7 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             if (!$ioShippingMethod || !isset($mageShippingMethods[$ioShippingMethod])) {
                 $ioShippingMethod = $defaultShippingMethod;
             }
-            $ioShippingDescription = $mageShippingMethods[$ioShippingMethod];
+            $ioShippingDescription = $mageShippingMethods[$ioShippingMethod ?? ''];
             if ($ioShippingMethod && $ioShippingDescription) {
                 if (!$isOldOrder) {
                     if ($skuIsMissing) {
