@@ -277,7 +277,7 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
             if (!$operator) {
                 continue;
             }
-            $condition = array_map('trim', explode($operator, (string) $filterItem));
+            $condition = array_map('trim', explode((string) $operator, (string) $filterItem));
             if (count($condition) !== 2 || empty($condition[0]) || empty($condition[1])) {
                 continue;
             }
@@ -288,9 +288,9 @@ class ShipmentManagement implements \WiseRobot\Io\Api\ShipmentManagementInterfac
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
             }
-            $operator = trim($operator);
+            $operator = trim((string) $operator);
             if (in_array($operator, ['in', 'nin'])) {
-                $fieldValue = array_map('trim', explode(",", $fieldValue));
+                $fieldValue = array_map('trim', explode(",", (string) $fieldValue));
             }
             if ($fieldName === "updated_at") {
                 $shipmentCollection->addFieldToFilter(

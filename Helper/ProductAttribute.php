@@ -79,7 +79,7 @@ class ProductAttribute extends \Magento\Framework\App\Helper\AbstractHelper
         string $attributeCode,
         string $optionLabel
     ): string|int|null {
-        $optionLabel = trim($optionLabel);
+        $optionLabel = trim((string) $optionLabel);
         if (!$optionLabel) {
             $this->log("Empty option label provided for attribute '{$attributeCode}'");
             return null;

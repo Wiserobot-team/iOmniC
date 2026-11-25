@@ -131,12 +131,12 @@ class Image extends \Magento\Framework\App\Helper\AbstractHelper
         if (empty($oldImagesString)) {
             return $parsedImages;
         }
-        $pairs = explode(',', $oldImagesString);
+        $pairs = explode(',', (string) $oldImagesString);
         foreach ($pairs as $pair) {
-            $parts = explode('=', $pair, 2);
+            $parts = explode('=', (string) $pair, 2);
             if (count($parts) === 2) {
-                $key = trim($parts[0]);
-                $url = trim($parts[1]);
+                $key = trim((string) $parts[0]);
+                $url = trim((string) $parts[1]);
                 $position = (int) preg_replace('/[^0-9]/', '', $key);
                 if ($position > 0 && !empty($url)) {
                     $parsedImages[$position] = $url;

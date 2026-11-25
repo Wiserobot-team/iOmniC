@@ -84,7 +84,7 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
         $paths = preg_split("/::|:|,\s*/", $tree, -1, PREG_SPLIT_NO_EMPTY);
         $result = [];
         foreach ($paths as $path) {
-            $path = trim($path);
+            $path = trim((string) $path);
             if (!$path) {
                 continue;
             }
@@ -126,7 +126,7 @@ class Category extends \Magento\Framework\App\Helper\AbstractHelper
         $parentId = (int) $rootCatId;
         $resultCatIds = [];
         foreach ($categoryLevels as $levelName) {
-            $levelName = trim($levelName);
+            $levelName = trim((string) $levelName);
             if (!$levelName || $levelName === $rootCatName) {
                 continue;
             }

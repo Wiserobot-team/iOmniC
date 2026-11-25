@@ -236,14 +236,14 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
         \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection,
         string $filter
     ): void {
-        $filter = trim($filter);
-        $filterArray = explode(" and ", $filter);
+        $filter = trim((string) $filter);
+        $filterArray = explode(" and ", (string) $filter);
         foreach ($filterArray as $filterItem) {
             $operator = $this->processFilter($filterItem);
             if (!$operator) {
                 continue;
             }
-            $condition = array_map('trim', explode($operator, $filterItem));
+            $condition = array_map('trim', explode((string) $operator, (string) $filterItem));
             if (count($condition) !== 2 || empty($condition[0]) || empty($condition[1])) {
                 continue;
             }
@@ -256,9 +256,9 @@ class StockManagement implements \WiseRobot\Io\Api\StockManagementInterface
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
             }
-            $operator = trim($operator);
+            $operator = trim((string) $operator);
             if (in_array($operator, ['in', 'nin'])) {
-                $fieldValue = array_map('trim', explode(",", $fieldValue));
+                $fieldValue = array_map('trim', explode(",", (string) $fieldValue));
             }
             $productCollection->addFieldToFilter(
                 $fieldName,

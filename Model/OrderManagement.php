@@ -726,11 +726,13 @@ class OrderManagement implements \WiseRobot\Io\Api\OrderManagementInterface
             // set shipping method
             $mageShippingMethods = $this->getMagentoShippingMethods();
             $defaultShippingMethod = key($mageShippingMethods);
-            $ioShippingMethod = $shippingInfo["shipping_method"];
+            $ioShippingMethod = $shippingInfo['shipping_method'] ?? '';
             if (!$ioShippingMethod || !isset($mageShippingMethods[$ioShippingMethod])) {
                 $ioShippingMethod = $defaultShippingMethod;
             }
-            $ioShippingDescription = $mageShippingMethods[$ioShippingMethod ?? ''];
+            $ioShippingDescription = ($ioShippingMethod !== null && isset($mageShippingMethods[$ioShippingMethod]))
+                ? $mageShippingMethods[$ioShippingMethod]
+                : '';
             if ($ioShippingMethod && $ioShippingDescription) {
                 if (!$isOldOrder) {
                     if ($skuIsMissing) {

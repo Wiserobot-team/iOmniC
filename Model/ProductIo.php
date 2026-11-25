@@ -316,11 +316,11 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         int $limit = 100
     ): array {
         $result = [];
-        $stores = trim($stores);
+        $stores = trim((string) $stores);
         if (in_array($stores, ['', '*'])) {
             $storeIds = array_keys($this->storeManager->getStores());
         } else {
-            $storeIds = array_filter(array_map('trim', explode(",", $stores)), 'is_numeric');
+            $storeIds = array_filter(array_map('trim', explode(",", (string) $stores)), 'is_numeric');
         }
         foreach ($storeIds as $storeId) {
             $storeId = (int) $storeId;
@@ -382,12 +382,12 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection,
         string $select
     ): void {
-        $select = trim($select);
+        $select = trim((string) $select);
         if (in_array($select, ['', '*'])) {
             $this->selectAll = true;
             $productCollection->addAttributeToSelect('*');
         } else {
-            $this->selectAttrs = array_map('trim', explode(',', $select));
+            $this->selectAttrs = array_map('trim', explode(',', (string) $select));
             $productCollection->addAttributeToSelect(array_merge($this->defaultAttributes, $this->selectAttrs));
         }
     }
@@ -403,14 +403,14 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
         \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection,
         string $filter
     ): void {
-        $filter = trim($filter);
-        $filterArray = explode(" and ", $filter);
+        $filter = trim((string) $filter);
+        $filterArray = explode(" and ", (string) $filter);
         foreach ($filterArray as $filterItem) {
             $operator = $this->processFilter($filterItem);
             if (!$operator) {
                 continue;
             }
-            $condition = array_map('trim', explode($operator, $filterItem));
+            $condition = array_map('trim', explode((string) $operator, (string) $filterItem));
             if (count($condition) !== 2 || empty($condition[0]) || empty($condition[1])) {
                 continue;
             }
@@ -423,9 +423,9 @@ class ProductIo implements \WiseRobot\Io\Api\ProductIoInterface
                 $this->results["error"] = $message;
                 throw new WebapiException(__($message), 0, 400, $this->results);
             }
-            $operator = trim($operator);
+            $operator = trim((string) $operator);
             if (in_array($operator, ['in', 'nin'])) {
-                $fieldValue = array_map('trim', explode(",", $fieldValue));
+                $fieldValue = array_map('trim', explode(",", (string) $fieldValue));
             }
             $productCollection->addFieldToFilter(
                 $fieldName,

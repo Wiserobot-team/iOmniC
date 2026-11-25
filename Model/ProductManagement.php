@@ -614,7 +614,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                             }
                         } elseif ($frontendInput === 'multiselect') {
                             if (is_string($attrValue)) {
-                                $attrValue = array_map('trim', explode(',', $attrValue));
+                                $attrValue = array_map('trim', explode(',', (string) $attrValue));
                             }
                             if (!$attrValue = $this->getMultiselectAttributeValue($attrCode, (array) $attrValue)) {
                                 continue;
@@ -623,7 +623,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
                     }
                     $currentValue = $product->getData($attrCode);
                     if ($frontendInput === 'multiselect' && !empty($currentValue)) {
-                        $currentValue = explode(',', $currentValue);
+                        $currentValue = explode(',', (string) $currentValue);
                         sort($currentValue);
                         $currentValue = implode(',', $currentValue);
                     }
@@ -1474,7 +1474,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function getAttributeSetIdByName(string $attributeSetName): ?int
     {
-        $attributeSetName = trim($attributeSetName);
+        $attributeSetName = trim((string) $attributeSetName);
         if (empty($attributeSetName)) {
             return null;
         }
@@ -1503,7 +1503,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function getTaxClassIdByName(string $taxClassName): ?int
     {
-        $taxClassName = trim($taxClassName);
+        $taxClassName = trim((string) $taxClassName);
         if (empty($taxClassName)) {
             return null;
         }
@@ -1534,7 +1534,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function getVisibility(string $visibility): int
     {
-        $trimmedVisibility = trim($visibility);
+        $trimmedVisibility = trim((string) $visibility);
         if (is_numeric($trimmedVisibility)) {
             $id = (int) $trimmedVisibility;
             if (in_array($id, [
@@ -1563,7 +1563,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
      */
     public function getStatus(string $status): int
     {
-        $statusValue = strtolower(trim($status));
+        $statusValue = strtolower(trim((string) $status));
         return match ($statusValue) {
             'disabled', 'false', '2' => self::STATUS_DISABLED,
             default => self::STATUS_ENABLED,
@@ -1665,7 +1665,7 @@ class ProductManagement implements \WiseRobot\Io\Api\ProductManagementInterface
         $optionIds = [];
         $hasError = false;
         foreach ($optionLabels as $optionLabel) {
-            $optionLabel = trim((string)$optionLabel);
+            $optionLabel = trim((string) $optionLabel);
             if (empty($optionLabel)) {
                 continue;
             }
